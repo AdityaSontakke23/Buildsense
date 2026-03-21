@@ -3,11 +3,29 @@ import { logError } from '@/src/utils/errorHandler';
 
 export const createProject = async (projectData) => {
   try {
+    const payload = {
+      user_id:             projectData.userId,
+      name:                projectData.name,
+      city:                projectData.city,
+      lat:                 projectData.lat ?? null,
+      lon:                 projectData.lon ?? null,
+      area:                projectData.area ? parseFloat(projectData.area) : null,
+      floors:              projectData.floors ? parseInt(projectData.floors) : 1,
+      orientation:         projectData.orientation,
+      wall_type:           projectData.wallType,
+      roof_type:           projectData.roofType,
+      wwr:                 parseInt(projectData.wwr),
+      passive_strategies:  projectData.passiveStrategies ?? [],
+      weather:             projectData.weather ?? null,
+      score:               projectData.score ?? null,
+    };
+
     const { data, error } = await supabase
       .from('projects')
-      .insert(projectData)
+      .insert(payload)
       .select('id, name, city, score, created_at')
       .single();
+
     if (error) throw error;
     return { data, error: null };
   } catch (error) {
