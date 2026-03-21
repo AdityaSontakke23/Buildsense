@@ -4,6 +4,7 @@ import {
   FlatList, Pressable
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/src/hooks/useTheme';
@@ -13,17 +14,16 @@ import Loader from '@/src/components/common/Loader';
 import { SPACING, TYPOGRAPHY } from '@/src/utils/constants';
 
 const SORT_OPTIONS = [
-  { key: 'date', label: 'Date' },
+  { key: 'date',  label: 'Date'  },
   { key: 'score', label: 'Score' },
-  { key: 'city', label: 'City' },
+  { key: 'city',  label: 'City'  },
 ];
 
 export default function SavedScreen() {
   const { colors } = useTheme();
   const { projects, isLoading, refreshProjects, deleteProject } = useProjects();
-
   const [search, setSearch] = useState('');
-  const [sort, setSort] = useState('date');
+  const [sort, setSort]     = useState('date');
 
   useEffect(() => { refreshProjects(); }, []);
 
@@ -35,9 +35,9 @@ export default function SavedScreen() {
         (p) => p.name?.toLowerCase().includes(q) || p.city?.toLowerCase().includes(q)
       );
     }
-    if (sort === 'score') list.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    if (sort === 'score')     list.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     else if (sort === 'city') list.sort((a, b) => (a.city ?? '').localeCompare(b.city ?? ''));
-    else list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    else                      list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return list;
   }, [projects, search, sort]);
 
@@ -47,18 +47,32 @@ export default function SavedScreen() {
 
   const renderEmpty = () => (
     <View style={styles.emptyWrap}>
-      <Ionicons name="folder-open-outline" size={52} color={colors.textLight} />
+      <LinearGradient
+        colors={['#9760d225', '#06B6D425']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.emptyIconCircle}
+      >
+        <Ionicons name="folder-open-outline" size={44} color={colors.textLight} />
+      </LinearGradient>
       <Text style={[styles.emptyTitle, { color: colors.text }]}>No projects yet</Text>
       <Text style={[styles.emptySub, { color: colors.textLight }]}>
         Create your first project to see it here
       </Text>
-      <Pressable
-        onPress={() => router.push('/new-project')}
-        style={[styles.emptyBtn, { backgroundColor: colors.primary }]}
+      <LinearGradient
+        colors={['#6366F1', '#06B6D4']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.emptyBtnGradient}
       >
-        <Ionicons name="add" size={16} color="#FFFFFF" />
-        <Text style={styles.emptyBtnText}>Create New</Text>
-      </Pressable>
+        <Pressable
+          onPress={() => router.push('/new-project')}
+          style={({ pressed }) => [styles.emptyBtn, { opacity: pressed ? 0.88 : 1 }]}
+        >
+          <Ionicons name="add" size={16} color="#FFFFFF" />
+          <Text style={styles.emptyBtnText}>Create New</Text>
+        </Pressable>
+      </LinearGradient>
     </View>
   );
 
@@ -67,7 +81,16 @@ export default function SavedScreen() {
 
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Saved Projects</Text>
+        <View>
+          <Text style={[styles.title, { color: colors.text }]}>Saved Projects</Text>
+          {/* Gradient underline below title */}
+          <LinearGradient
+            colors={['#9760d2', '#7ee887']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.titleUnderline}
+          />
+        </View>
         <View style={[styles.syncBadge, { backgroundColor: colors.secondary + '15' }]}>
           <Ionicons name="cloud-done-outline" size={13} color={colors.secondary} />
           <Text style={[styles.syncText, { color: colors.secondary }]}>Synced</Text>
@@ -93,29 +116,34 @@ export default function SavedScreen() {
 
       {/* Sort chips */}
       <View style={styles.chipRow}>
-        {SORT_OPTIONS.map((opt) => (
-          <Pressable
-            key={opt.key}
-            onPress={() => setSort(opt.key)}
-            style={[
-              styles.chip,
-              {
-                backgroundColor: sort === opt.key ? colors.primary : colors.surface,
-                borderColor: sort === opt.key ? colors.primary : colors.border,
-              },
-            ]}
-          >
-            {sort === opt.key && (
-              <Ionicons name="checkmark" size={13} color="#FFFFFF" />
-            )}
-            <Text style={[
-              styles.chipText,
-              { color: sort === opt.key ? '#FFFFFF' : colors.textLight },
-            ]}>
-              {opt.label}
-            </Text>
-          </Pressable>
-        ))}
+        {SORT_OPTIONS.map((opt) => {
+          const active = sort === opt.key;
+          return active ? (
+            <LinearGradient
+              key={opt.key}
+              colors={['#6366F1', '#8B5CF6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.chipGradient}
+            >
+              <Pressable
+                onPress={() => setSort(opt.key)}
+                style={styles.chipInner}
+              >
+                <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+                <Text style={[styles.chipText, { color: '#FFFFFF' }]}>{opt.label}</Text>
+              </Pressable>
+            </LinearGradient>
+          ) : (
+            <Pressable
+              key={opt.key}
+              onPress={() => setSort(opt.key)}
+              style={[styles.chip, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Text style={[styles.chipText, { color: colors.textLight }]}>{opt.label}</Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {/* List */}
@@ -138,17 +166,21 @@ export default function SavedScreen() {
         />
       )}
 
-      {/* FAB */}
+      {/* Gradient FAB */}
       {projects.length > 0 && (
-        <Pressable
-          onPress={() => router.push('/new-project')}
-          style={({ pressed }) => [
-            styles.fab,
-            { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 },
-          ]}
+        <LinearGradient
+          colors={['#6366F1', '#06B6D4']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.fabGradient}
         >
-          <Ionicons name="add" size={26} color="#FFFFFF" />
-        </Pressable>
+          <Pressable
+            onPress={() => router.push('/new-project')}
+            style={({ pressed }) => [styles.fab, { opacity: pressed ? 0.88 : 1 }]}
+          >
+            <Ionicons name="add" size={26} color="#FFFFFF" />
+          </Pressable>
+        </LinearGradient>
       )}
 
     </SafeAreaView>
@@ -165,6 +197,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   title: { ...TYPOGRAPHY.h2, fontWeight: '800' },
+  titleUnderline: {
+    height: 2, borderRadius: 1,
+    marginTop: 4, width: '100%',
+  },
   syncBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: SPACING.sm, paddingVertical: 4, borderRadius: 20,
@@ -182,8 +218,12 @@ const styles = StyleSheet.create({
 
   chipRow: {
     flexDirection: 'row', gap: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm,
+  },
+  chipGradient: { borderRadius: 20 },
+  chipInner: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: SPACING.md, paddingVertical: 6,
   },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -195,23 +235,25 @@ const styles = StyleSheet.create({
   list: { padding: SPACING.lg, paddingBottom: SPACING.xl + 60 },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-  emptyWrap: {
-    alignItems: 'center', paddingTop: SPACING.xl * 2, gap: SPACING.sm,
+  emptyWrap: { alignItems: 'center', paddingTop: SPACING.xl * 2, gap: SPACING.sm },
+  emptyIconCircle: {
+    width: 110, height: 110, borderRadius: 55,
+    alignItems: 'center', justifyContent: 'center',
   },
   emptyTitle: { ...TYPOGRAPHY.h3, fontWeight: '700', marginTop: SPACING.sm },
   emptySub: { ...TYPOGRAPHY.bodySmall, textAlign: 'center', maxWidth: 220 },
+  emptyBtnGradient: { borderRadius: 10, marginTop: SPACING.md },
   emptyBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    marginTop: SPACING.md, paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm + 2, borderRadius: 10,
+    paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm + 2,
   },
   emptyBtnText: { ...TYPOGRAPHY.body, color: '#FFFFFF', fontWeight: '700' },
 
-  fab: {
+  fabGradient: {
     position: 'absolute', bottom: 24, right: 24,
     width: 56, height: 56, borderRadius: 28,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2, shadowRadius: 8, elevation: 6,
+    shadowColor: '#6366F1', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
   },
+  fab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

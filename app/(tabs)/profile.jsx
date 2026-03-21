@@ -4,6 +4,7 @@ import {
   ScrollView, Pressable, Switch
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Button from '@/src/components/common/Button';
@@ -13,12 +14,22 @@ import { useProjects } from '@/src/hooks/useProjects';
 import { SPACING, TYPOGRAPHY } from '@/src/utils/constants';
 import { getAverageScore } from '@/src/utils/helpers';
 
-const SettingRow = ({ icon, label, value, onPress, rightEl, colors }) => (
+const getInitials = (name = '') => {
+  const parts = name.trim().split(' ').filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return (parts[0]?.[0] ?? '?').toUpperCase();
+};
+
+const SettingRow = ({ icon, label, value, onPress, rightEl, colors, active }) => (
   <Pressable
     onPress={onPress}
     style={({ pressed }) => [
       styles.settingRow,
-      { borderBottomColor: colors.border, opacity: pressed && onPress ? 0.7 : 1 },
+      {
+        borderBottomColor: colors.border,
+        opacity: pressed && onPress ? 0.7 : 1,
+        backgroundColor: active ? colors.primary + '10' : 'transparent',
+      },
     ]}
   >
     <View style={[styles.settingIcon, { backgroundColor: colors.primary + '15' }]}>
@@ -46,6 +57,7 @@ export default function ProfileScreen() {
   const email = user?.email ?? '';
   const totalProjects = projects.length;
   const avgScore = getAverageScore(projects);
+  const initials = getInitials(displayName);
 
   const handleLogout = () => {
     Alert.alert(
@@ -72,45 +84,74 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
 
-        {/* Header */}
+        {/* Page title */}
         <Text style={[styles.pageTitle, { color: colors.text }]}>Profile</Text>
 
-        {/* Avatar + identity card */}
-        <View style={[styles.identityCard, { backgroundColor: colors.primary }]}>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarLetter}>
-              {displayName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+        {/* Identity card */}
+        <LinearGradient
+          colors={['#6366F1', '#8B5CF6', '#06B6D4']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.identityCard}
+        >
+          {/* Decorative circles */}
+          <View style={styles.decCircle1} />
+          <View style={styles.decCircle2} />
+
+          {/* Avatar with gradient ring */}
+          <LinearGradient
+            colors={['#9760d2', '#7ee887', '#F5D9B0']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.avatarRing}
+          >
+            <View style={styles.avatarInner}>
+              <Text style={styles.avatarInitials}>{initials}</Text>
+            </View>
+          </LinearGradient>
+
           <Text style={styles.nameText}>{displayName}</Text>
           <Text style={styles.emailText}>{email}</Text>
-        </View>
+
+          {/* Verified chip */}
+          <View style={styles.verifiedChip}>
+            <Ionicons name="checkmark-circle" size={12} color="#FFFFFF" />
+            <Text style={styles.verifiedText}>Verified Account</Text>
+          </View>
+        </LinearGradient>
 
         {/* Stats row */}
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.statTopBar, { backgroundColor: colors.primary }]} />
             <Text style={[styles.statValue, { color: colors.primary }]}>{totalProjects}</Text>
             <Text style={[styles.statLabel, { color: colors.textLight }]}>Projects</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.statValue, { color: totalProjects > 0 ? colors.primary : colors.textLight }]}>
+            <View style={[styles.statTopBar, { backgroundColor: colors.success }]} />
+            <Text style={[styles.statValue, { color: totalProjects > 0 ? colors.success : colors.textLight }]}>
               {totalProjects > 0 ? avgScore : '—'}
             </Text>
             <Text style={[styles.statLabel, { color: colors.textLight }]}>Avg Score</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.statTopBar, { backgroundColor: colors.secondary }]} />
             <Ionicons name="cloud-done-outline" size={22} color={colors.secondary} />
             <Text style={[styles.statLabel, { color: colors.textLight }]}>Synced</Text>
           </View>
         </View>
 
-        {/* Preferences section */}
-        <Text style={[styles.sectionLabel, { color: colors.textLight }]}>PREFERENCES</Text>
+        {/* Preferences */}
+        <View style={styles.sectionLabelRow}>
+          <View style={[styles.sectionAccent, { backgroundColor: colors.primary }]} />
+          <Text style={[styles.sectionLabel, { color: colors.textLight }]}>PREFERENCES</Text>
+        </View>
         <View style={[styles.settingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <SettingRow
             icon="moon-outline"
             label="Dark Mode"
             colors={colors}
+            active={isDark}
             rightEl={
               <Switch
                 value={isDark}
@@ -128,14 +169,16 @@ export default function ProfileScreen() {
           />
         </View>
 
-        {/* About section */}
-        <Text style={[styles.sectionLabel, { color: colors.textLight }]}>ABOUT</Text>
+        {/* About */}
+        <View style={styles.sectionLabelRow}>
+          <View style={[styles.sectionAccent, { backgroundColor: colors.secondary }]} />
+          <Text style={[styles.sectionLabel, { color: colors.textLight }]}>ABOUT</Text>
+        </View>
         <View style={[styles.settingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <SettingRow
             icon="information-circle-outline"
             label="What this app does"
             colors={colors}
-            value=""
             rightEl={null}
           />
           <View style={styles.aboutContent}>
@@ -145,7 +188,12 @@ export default function ProfileScreen() {
               'Helps visualise impact of orientation, WWR, and envelope choices.',
             ].map((item, i) => (
               <View key={i} style={styles.bulletRow}>
-                <View style={[styles.bullet, { backgroundColor: colors.secondary }]} />
+                <LinearGradient
+                  colors={['#9760d2', '#7ee887']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.bullet}
+                />
                 <Text style={[styles.bulletText, { color: colors.textLight }]}>{item}</Text>
               </View>
             ))}
@@ -155,7 +203,6 @@ export default function ProfileScreen() {
             icon="shield-checkmark-outline"
             label="Data & Privacy"
             colors={colors}
-            value=""
             rightEl={null}
           />
           <Text style={[styles.privacyText, { color: colors.textLight }]}>
@@ -164,12 +211,10 @@ export default function ProfileScreen() {
           </Text>
         </View>
 
-        {/* App version */}
+        {/* Version */}
         <View style={styles.versionRow}>
           <Ionicons name="apps-outline" size={16} color={colors.textLight} />
-          <Text style={[styles.versionText, { color: colors.textLight }]}>
-            BuildSense v1.0
-          </Text>
+          <Text style={[styles.versionText, { color: colors.textLight }]}>BuildSense v1.0</Text>
         </View>
 
         {/* Logout */}
@@ -192,38 +237,65 @@ const styles = StyleSheet.create({
 
   pageTitle: { ...TYPOGRAPHY.h2, fontWeight: '800', marginBottom: SPACING.lg },
 
+  // Identity card
   identityCard: {
-    borderRadius: 16, padding: SPACING.lg,
+    borderRadius: 20, padding: SPACING.lg,
     alignItems: 'center', marginBottom: SPACING.md,
+    overflow: 'hidden', paddingVertical: SPACING.xl,
   },
-  avatarCircle: {
-    width: 68, height: 68, borderRadius: 34,
-    backgroundColor: '#FFFFFF30',
+  decCircle1: {
+    position: 'absolute', width: 140, height: 140,
+    borderRadius: 70, backgroundColor: '#FFFFFF08',
+    top: -40, right: -30,
+  },
+  decCircle2: {
+    position: 'absolute', width: 100, height: 100,
+    borderRadius: 50, backgroundColor: '#FFFFFF08',
+    bottom: -20, left: -20,
+  },
+  avatarRing: {
+    width: 80, height: 80, borderRadius: 22,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md, padding: 2.5,
   },
-  avatarLetter: { fontSize: 30, fontWeight: '800', color: '#FFFFFF' },
+  avatarInner: {
+    flex: 1, width: '100%', borderRadius: 20,
+    backgroundColor: '#1E1040',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  avatarInitials: { fontSize: 28, fontWeight: '800', color: '#FFFFFF' },
   nameText: { ...TYPOGRAPHY.h3, color: '#FFFFFF', fontWeight: '700' },
   emailText: { ...TYPOGRAPHY.bodySmall, color: '#FFFFFFB0', marginTop: 4 },
-
-  statsRow: {
-    flexDirection: 'row', gap: SPACING.sm,
-    marginBottom: SPACING.lg,
+  verifiedChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#FFFFFF20', borderRadius: 20,
+    paddingHorizontal: SPACING.sm, paddingVertical: 4,
+    marginTop: SPACING.md,
   },
+  verifiedText: { ...TYPOGRAPHY.caption, color: '#FFFFFF', fontWeight: '600' },
+
+  // Stats
+  statsRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.lg },
   statCard: {
-    flex: 1, borderRadius: 12, padding: SPACING.md,
-    alignItems: 'center', borderWidth: 1.5, gap: 4,
+    flex: 1, borderRadius: 12, borderWidth: 1.5,
+    alignItems: 'center', overflow: 'hidden',
+    paddingBottom: SPACING.md,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
   },
+  statTopBar: { width: '100%', height: 3, marginBottom: SPACING.sm },
   statValue: { ...TYPOGRAPHY.h2, fontWeight: '800' },
   statLabel: { ...TYPOGRAPHY.caption },
 
-  sectionLabel: {
-    ...TYPOGRAPHY.caption, fontWeight: '700',
-    letterSpacing: 1, marginBottom: SPACING.sm,
-    marginTop: SPACING.sm,
+  // Section labels
+  sectionLabelRow: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: SPACING.xs, marginBottom: SPACING.sm, marginTop: SPACING.sm,
   },
+  sectionAccent: { width: 3, height: 14, borderRadius: 2 },
+  sectionLabel: { ...TYPOGRAPHY.caption, fontWeight: '700', letterSpacing: 1 },
+
+  // Settings card
   settingsCard: {
     borderRadius: 14, borderWidth: 1.5,
     overflow: 'hidden', marginBottom: SPACING.lg,
@@ -244,7 +316,10 @@ const styles = StyleSheet.create({
   settingValue: { ...TYPOGRAPHY.bodySmall },
 
   aboutContent: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.md },
-  bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm, marginBottom: SPACING.xs },
+  bulletRow: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    gap: SPACING.sm, marginBottom: SPACING.xs,
+  },
   bullet: { width: 6, height: 6, borderRadius: 3, marginTop: 6 },
   bulletText: { ...TYPOGRAPHY.bodySmall, flex: 1, lineHeight: 20 },
 
@@ -259,6 +334,5 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   versionText: { ...TYPOGRAPHY.caption },
-
   logoutBtn: { marginBottom: SPACING.sm },
 });
