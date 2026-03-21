@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useAuthStore } from '@/src/store/authStore';
 import * as authService from '@/src/services/authService';
 import { parseSupabaseError } from '@/src/utils/errorHandler';
+import { useGoogleAuth } from '@/src/services/authService';
 
 export const useAuth = () => {
   const { user, session, isLoading, error, setUser, setSession, setLoading, setError, clearAuth } =
@@ -44,5 +45,21 @@ export const useAuth = () => {
     setLoading(false);
   };
 
-  return { user, session, isLoading, error, signIn, signUp, signOut };
+  const { request: googleRequest, signInWithGoogle: googleSignIn } = useGoogleAuth();
+
+  const signInWithGoogle = async () => {
+    setLoading(true);
+    setError(null);
+    const { data, error } = await googleSignIn();
+    if (error)
+      setError(typeof error === "string" ? error : parseSupabaseError(error));
+    else {
+      setSession(data.session);
+      setUser(data.user);
+    }
+    setLoading(false);
+    return { data, error };
+  };
+
+  return { user, session, isLoading, error, signIn, signUp, signOut, signInWithGoogle, googleRequest };
 };
