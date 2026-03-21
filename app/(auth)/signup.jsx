@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import Input from '@/src/components/common/Input';
 import Button from '@/src/components/common/Button';
 import { useAuth } from '@/src/hooks/useAuth';
@@ -14,7 +13,7 @@ import { validateEmail, validatePassword, validateProjectName } from '@/src/util
 import { SPACING, TYPOGRAPHY } from '@/src/utils/constants';
 
 export default function SignupScreen() {
-  const { signUp, signInWithGoogle, googleRequest, isLoading, error } = useAuth();
+  const { signUp, isLoading, error } = useAuth();
   const { colors } = useTheme();
 
   const [displayName, setDisplayName] = useState('');
@@ -36,11 +35,6 @@ export default function SignupScreen() {
   const handleSignup = async () => {
     if (!validate()) return;
     const { error } = await signUp(email, password, displayName);
-    if (!error) router.replace('/(tabs)/home');
-  };
-
-  const handleGoogleSignup = async () => {
-    const { error } = await signInWithGoogle();
     if (!error) router.replace('/(tabs)/home');
   };
 
@@ -69,32 +63,6 @@ export default function SignupScreen() {
                 <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
               </View>
             )}
-
-            {/* Google First — easier signup */}
-            <Pressable
-              onPress={handleGoogleSignup}
-              disabled={!googleRequest || isLoading}
-              style={({ pressed }) => [
-                styles.googleBtn,
-                {
-                  borderColor: colors.border,
-                  backgroundColor: pressed ? colors.background : colors.surface,
-                  opacity: !googleRequest ? 0.5 : 1,
-                },
-              ]}
-            >
-              <Ionicons name="logo-google" size={18} color="#DB4437" />
-              <Text style={[styles.googleText, { color: colors.text }]}>
-                Sign up with Google
-              </Text>
-            </Pressable>
-
-            {/* Divider */}
-            <View style={styles.dividerRow}>
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              <Text style={[styles.dividerText, { color: colors.textLight }]}>or</Text>
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            </View>
 
             <Input
               label="Full Name"
@@ -168,18 +136,6 @@ const styles = StyleSheet.create({
   formTitle: { ...TYPOGRAPHY.h2, marginBottom: SPACING.lg },
   errorBanner: { padding: SPACING.sm, borderRadius: 8, marginBottom: SPACING.md },
   errorText: { ...TYPOGRAPHY.bodySmall },
-  googleBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderRadius: 10, paddingVertical: SPACING.sm + 4,
-    gap: SPACING.sm, minHeight: 48, marginBottom: SPACING.xs,
-  },
-  googleText: { ...TYPOGRAPHY.body, fontWeight: '600' },
-  dividerRow: {
-    flexDirection: 'row', alignItems: 'center',
-    marginVertical: SPACING.md, gap: SPACING.sm,
-  },
-  divider: { flex: 1, height: 1 },
-  dividerText: { ...TYPOGRAPHY.caption },
   btn: { marginTop: SPACING.sm },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   footerText: { ...TYPOGRAPHY.body },

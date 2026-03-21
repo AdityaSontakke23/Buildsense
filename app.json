@@ -2,7 +2,7 @@
   "expo": {
     "name": "Buildsense",
     "slug": "buildsense",
-    "scheme": "buildsense",
+    "scheme": "com.adison.buildsense",
     "main": "expo-router/entry",
     "version": "1.0.0",
     "orientation": "portrait",

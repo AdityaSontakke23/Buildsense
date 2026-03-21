@@ -1,20 +1,25 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { getScoreColor } from '@/src/utils/helpers';
 import { useTheme } from '@/src/hooks/useTheme';
 import { TYPOGRAPHY } from '@/src/utils/constants';
 
 const ScoreGauge = ({ score, size = 160 }) => {
   const { colors } = useTheme();
-  const color = getScoreColor(score);
+
+  const safeScore = (typeof score === 'number' && !isNaN(score))
+    ? Math.min(100, Math.max(0, score))
+    : 0;
+
+  const color = getScoreColor(safeScore);
   const cx = size / 2;
   const cy = size / 2;
   const r = (size / 2) * 0.78;
   const startAngle = -210;
   const endAngle = 30;
   const totalAngle = 240;
-  const scoreAngle = startAngle + (score / 100) * totalAngle;
+  const scoreAngle = startAngle + (safeScore / 100) * totalAngle;
 
   const toRad = (deg) => (deg * Math.PI) / 180;
   const arcPath = (start, end) => {
@@ -29,13 +34,25 @@ const ScoreGauge = ({ score, size = 160 }) => {
   return (
     <View style={styles.wrapper}>
       <Svg width={size} height={size}>
-        <Path d={arcPath(startAngle, endAngle)} stroke={colors.border}
-          strokeWidth={10} fill="none" strokeLinecap="round" />
-        <Path d={arcPath(startAngle, scoreAngle)} stroke={color}
-          strokeWidth={10} fill="none" strokeLinecap="round" />
+        <Path
+          d={arcPath(startAngle, endAngle)}
+          stroke={colors.border}
+          strokeWidth={10}
+          fill="none"
+          strokeLinecap="round"
+        />
+        {safeScore > 0 && (
+          <Path
+            d={arcPath(startAngle, scoreAngle)}
+            stroke={color}
+            strokeWidth={10}
+            fill="none"
+            strokeLinecap="round"
+          />
+        )}
       </Svg>
       <View style={[styles.center, { width: size, height: size }]}>
-        <Text style={[styles.score, { color }]}>{score}</Text>
+        <Text style={[styles.score, { color }]}>{safeScore}</Text>
         <Text style={[styles.label, { color: colors.textLight }]}>/ 100</Text>
       </View>
     </View>

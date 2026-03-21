@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import Input from '@/src/components/common/Input';
 import Button from '@/src/components/common/Button';
 import { useAuth } from '@/src/hooks/useAuth';
@@ -14,7 +13,7 @@ import { validateEmail, validatePassword } from '@/src/utils/validators';
 import { SPACING, TYPOGRAPHY } from '@/src/utils/constants';
 
 export default function LoginScreen() {
-  const { signIn, signInWithGoogle, googleRequest, isLoading, error } = useAuth();
+  const { signIn, isLoading, error } = useAuth();
   const { colors } = useTheme();
 
   const [email, setEmail] = useState('');
@@ -32,11 +31,6 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     if (!validate()) return;
     const { error } = await signIn(email, password);
-    if (!error) router.replace('/(tabs)/home');
-  };
-
-  const handleGoogleLogin = async () => {
-    const { error } = await signInWithGoogle();
     if (!error) router.replace('/(tabs)/home');
   };
 
@@ -93,32 +87,6 @@ export default function LoginScreen() {
             <Pressable style={styles.linkRow}>
               <Text style={[styles.link, { color: colors.textLight }]}>Forgot password?</Text>
             </Pressable>
-
-            {/* Divider */}
-            <View style={styles.dividerRow}>
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              <Text style={[styles.dividerText, { color: colors.textLight }]}>or</Text>
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            </View>
-
-            {/* Google Button */}
-            <Pressable
-              onPress={handleGoogleLogin}
-              disabled={!googleRequest || isLoading}
-              style={({ pressed }) => [
-                styles.googleBtn,
-                {
-                  borderColor: colors.border,
-                  backgroundColor: pressed ? colors.background : colors.surface,
-                  opacity: !googleRequest ? 0.5 : 1,
-                },
-              ]}
-            >
-              <Ionicons name="logo-google" size={18} color="#DB4437" />
-              <Text style={[styles.googleText, { color: colors.text }]}>
-                Continue with Google
-              </Text>
-            </Pressable>
           </View>
 
           {/* Footer */}
@@ -156,18 +124,6 @@ const styles = StyleSheet.create({
   btn: { marginTop: SPACING.sm },
   linkRow: { alignItems: 'center', marginTop: SPACING.md },
   link: { ...TYPOGRAPHY.bodySmall },
-  dividerRow: {
-    flexDirection: 'row', alignItems: 'center',
-    marginVertical: SPACING.md, gap: SPACING.sm,
-  },
-  divider: { flex: 1, height: 1 },
-  dividerText: { ...TYPOGRAPHY.caption },
-  googleBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderRadius: 10, paddingVertical: SPACING.sm + 4,
-    gap: SPACING.sm, minHeight: 48,
-  },
-  googleText: { ...TYPOGRAPHY.body, fontWeight: '600' },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   footerText: { ...TYPOGRAPHY.body },
   footerLink: { ...TYPOGRAPHY.body, fontWeight: '700' },

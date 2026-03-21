@@ -1,7 +1,11 @@
 import React, { useEffect } from 'react';
 import { View, Pressable, StyleSheet, Dimensions } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle,
-  withTiming, withSpring } from 'react-native-reanimated';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { useTheme } from '@/src/hooks/useTheme';
 import { SPACING } from '@/src/utils/constants';
 
@@ -14,11 +18,23 @@ const Modal = ({ visible, onClose, children, variant = 'bottomSheet' }) => {
 
   useEffect(() => {
     if (visible) {
-      opacity.value = withTiming(1, { duration: 200 });
-      translateY.value = withSpring(0, { damping: 20 });
+      opacity.value = withTiming(1, {
+        duration: 250,
+        easing: Easing.out(Easing.ease),
+      });
+      translateY.value = withTiming(0, {
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+      });
     } else {
-      opacity.value = withTiming(0, { duration: 200 });
-      translateY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
+      opacity.value = withTiming(0, {
+        duration: 200,
+        easing: Easing.in(Easing.ease),
+      });
+      translateY.value = withTiming(SCREEN_HEIGHT, {
+        duration: 280,
+        easing: Easing.in(Easing.cubic),
+      });
     }
   }, [visible]);
 
@@ -37,12 +53,14 @@ const Modal = ({ visible, onClose, children, variant = 'bottomSheet' }) => {
       <Animated.View style={[styles.backdrop, backdropStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
-      <Animated.View style={[
-        styles.sheet,
-        { backgroundColor: colors.surface },
-        variant === 'centered' && styles.centered,
-        sheetStyle,
-      ]}>
+      <Animated.View
+        style={[
+          styles.sheet,
+          { backgroundColor: colors.surface },
+          variant === 'centered' && styles.centered,
+          sheetStyle,
+        ]}
+      >
         {children}
       </Animated.View>
     </View>
@@ -50,10 +68,25 @@ const Modal = ({ visible, onClose, children, variant = 'bottomSheet' }) => {
 };
 
 const styles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 100, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: SPACING.lg, paddingBottom: SPACING.xl },
-  centered: { margin: SPACING.lg, borderRadius: 16 },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 100,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: SPACING.lg,
+    paddingBottom: SPACING.xl,
+  },
+  centered: {
+    margin: SPACING.lg,
+    borderRadius: 16,
+  },
 });
 
 export default React.memo(Modal);

@@ -4,6 +4,27 @@ import { useAuthStore } from '@/src/store/authStore';
 import * as projectsService from '@/src/services/projectsService';
 import { parseSupabaseError } from '@/src/utils/errorHandler';
 
+// Supabase snake_case → app camelCase
+const mapProject = (p) => ({
+  id:                 p.id,
+  user_id:            p.user_id,
+  name:               p.name,
+  city:               p.city,
+  lat:                p.lat,
+  lon:                p.lon,
+  area:               p.area,
+  floors:             p.floors,
+  orientation:        p.orientation,
+  wallType:           p.wall_type,
+  roofType:           p.roof_type,
+  wwr:                p.wwr,
+  passiveStrategies:  Array.isArray(p.passive_strategies) ? p.passive_strategies : [],
+  weather:            p.weather ?? null,   // jsonb → already a JS object
+  score:              p.score,
+  created_at:         p.created_at,
+  updated_at:         p.updated_at,
+});
+
 export const useProjects = () => {
   const { projects, activeProject, isLoading, error, setProjects, addProject,
     removeProject, setActiveProject, setLoading, setError } = useProjectsStore();
@@ -14,7 +35,7 @@ export const useProjects = () => {
     setLoading(true);
     const { data, error } = await projectsService.getProjects(user.id);
     if (error) setError(parseSupabaseError(error));
-    else setProjects(data ?? []);
+    else setProjects((data ?? []).map(mapProject));
     setLoading(false);
   }, [user?.id]);
 
@@ -24,9 +45,9 @@ export const useProjects = () => {
 
   const createProject = async (projectData) => {
     const payload = { ...projectData, user_id: user.id };
-    // optimistic UI — add immediately
     const tempId = `temp_${Date.now()}`;
     addProject({ ...payload, id: tempId });
+
     const { data, error } = await projectsService.createProject(payload);
     if (error) {
       removeProject(tempId);
@@ -34,16 +55,17 @@ export const useProjects = () => {
       return { data: null, error };
     }
     removeProject(tempId);
-    addProject(data);
-    return { data, error: null };
+    const mapped = mapProject(data);
+    addProject(mapped);
+    return { data: mapped, error: null };
   };
 
   const deleteProject = async (id) => {
-    removeProject(id); // optimistic UI
+    removeProject(id);
     const { error } = await projectsService.deleteProject(id);
     if (error) {
       setError(parseSupabaseError(error));
-      refreshProjects(); // revert on failure
+      refreshProjects();
     }
     return { error };
   };
