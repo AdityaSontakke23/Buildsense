@@ -1,29 +1,71 @@
 import React, { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { supabase } from '@/src/services/supabase';
 
+function parseTokensFromUrl(url) {
+  if (!url) return null;
+  const hashPart = url.includes('#') ? url.split('#')[1] : url.split('?')[1];
+  if (!hashPart) return null;
+
+  const paramMap = {};
+  hashPart.split('&').forEach(pair => {
+    const [key, value] = pair.split('=');
+    if (key) paramMap[decodeURIComponent(key)] = decodeURIComponent(value || '');
+  });
+  return paramMap;
+}
+
+async function handleUrl(url) {
+  console.log('🔗 Handling URL:', url);
+  const params = parseTokensFromUrl(url);
+  console.log('📦 Parsed params:', params);
+
+  if (!params) {
+    router.replace('/(auth)/login');
+    return;
+  }
+
+  const { access_token, refresh_token, type } = params;
+
+  if (access_token && refresh_token) {
+    const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+    console.log('🔐 setSession error:', error);
+
+    if (!error) {
+      if (type === 'recovery') {
+        console.log('✅ Recovery → reset-password');
+        router.replace('/(auth)/reset-password');
+      } else {
+        console.log('✅ Verification → verified');
+        router.replace('/verify-email?verified=true');
+      }
+      return;
+    }
+  }
+
+  router.replace('/(auth)/login');
+}
+
 export default function AuthCallbackScreen() {
-  const params = useLocalSearchParams();
 
   useEffect(() => {
-    const handleCallback = async () => {
-      const access_token  = params.access_token;
-      const refresh_token = params.refresh_token;
-
-      if (access_token && refresh_token) {
-        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
-        if (!error) {
-          // Route back to verify-email screen with verified flag
-          // That screen shows the success animation then lets user in
-          router.replace('/verify-email?verified=true');
-          return;
-        }
+    // Case 1: App was COLD START — getInitialURL has value
+    Linking.getInitialURL().then(url => {
+      if (url) {
+        console.log('🧊 Cold start URL:', url);
+        handleUrl(url);
       }
-      router.replace('/(auth)/login');
-    };
+    });
 
-    handleCallback();
+    // Case 2: App was BACKGROUNDED — event fires when deep link opens
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      console.log('🔥 Foreground URL event:', url);
+      handleUrl(url);
+    });
+
+    return () => sub.remove();
   }, []);
 
   return (

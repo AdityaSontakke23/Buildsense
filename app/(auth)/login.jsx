@@ -37,26 +37,44 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.flex}
       >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.primary }]}>BuildSense</Text>
+            <Text style={[styles.title, { color: colors.primary }]}>
+              BuildSense
+            </Text>
             <Text style={[styles.subtitle, { color: colors.textLight }]}>
               Location-aware passive thermal insights
             </Text>
           </View>
 
           {/* Form Card */}
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.formTitle, { color: colors.text }]}>Welcome back</Text>
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.formTitle, { color: colors.text }]}>
+              Welcome back
+            </Text>
 
             {error && (
-              <View style={[styles.errorBanner, { backgroundColor: colors.error + '15' }]}>
-                <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+              <View
+                style={[
+                  styles.errorBanner,
+                  { backgroundColor: colors.error + "15" },
+                ]}
+              >
+                <Text style={[styles.errorText, { color: colors.error }]}>
+                  {error}
+                </Text>
               </View>
             )}
 
@@ -84,21 +102,27 @@ export default function LoginScreen() {
               style={styles.btn}
             />
 
-            <Pressable style={styles.linkRow}>
-              <Text style={[styles.link, { color: colors.textLight }]}>Forgot password?</Text>
+            <Pressable
+              style={styles.linkRow}
+              onPress={() => router.push("/(auth)/forgot-password")}
+            >
+              <Text style={[styles.link, { color: colors.primary }]}>
+                Forgot password?
+              </Text>
             </Pressable>
           </View>
 
           {/* Footer */}
           <View style={styles.footer}>
             <Text style={[styles.footerText, { color: colors.textLight }]}>
-              Don't have an account?{' '}
+              Don't have an account?{" "}
             </Text>
-            <Pressable onPress={() => router.push('/(auth)/signup')}>
-              <Text style={[styles.footerLink, { color: colors.primary }]}>Sign up</Text>
+            <Pressable onPress={() => router.push("/(auth)/signup")}>
+              <Text style={[styles.footerLink, { color: colors.primary }]}>
+                Sign up
+              </Text>
             </Pressable>
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

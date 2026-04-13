@@ -5,22 +5,33 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useAuth } from '@/src/hooks/useAuth';
 
 const { width, height } = Dimensions.get('window');
 
 export default function SplashScreen() {
-  const logoScale    = useRef(new Animated.Value(0.5)).current;
-  const logoOpacity  = useRef(new Animated.Value(0)).current;
-  const glowScale    = useRef(new Animated.Value(0.6)).current;
-  const glowOpacity  = useRef(new Animated.Value(0)).current;
-  const textOpacity  = useRef(new Animated.Value(0)).current;
-  const textY        = useRef(new Animated.Value(12)).current;
-  const tagOpacity   = useRef(new Animated.Value(0)).current;
-  const lineWidth    = useRef(new Animated.Value(0)).current;
+  const { session, isLoading } = useAuth();
+
+  const logoScale      = useRef(new Animated.Value(0.5)).current;
+  const logoOpacity    = useRef(new Animated.Value(0)).current;
+  const glowScale      = useRef(new Animated.Value(0.6)).current;
+  const glowOpacity    = useRef(new Animated.Value(0)).current;
+  const textOpacity    = useRef(new Animated.Value(0)).current;
+  const textY          = useRef(new Animated.Value(12)).current;
+  const tagOpacity     = useRef(new Animated.Value(0)).current;
+  const lineWidth      = useRef(new Animated.Value(0)).current;
   const versionOpacity = useRef(new Animated.Value(0)).current;
-  const exitOpacity  = useRef(new Animated.Value(1)).current;
+  const exitOpacity    = useRef(new Animated.Value(1)).current;
+
+  const animationStarted = useRef(false);
 
   useEffect(() => {
+    // Wait for auth to resolve before starting animation
+    if (isLoading) return;
+    // Only run once
+    if (animationStarted.current) return;
+    animationStarted.current = true;
+
     Animated.sequence([
       // 1. Glow blob expands first
       Animated.parallel([
@@ -36,7 +47,7 @@ export default function SplashScreen() {
           useNativeDriver: true,
         }),
       ]),
-      // 2. Logo springs in with scale + opacity
+      // 2. Logo springs in
       Animated.parallel([
         Animated.spring(logoScale, {
           toValue: 1,
@@ -63,7 +74,7 @@ export default function SplashScreen() {
           useNativeDriver: true,
         }),
       ]),
-      // 4. Accent line expands + tagline fades + version appears
+      // 4. Accent line + tagline + version
       Animated.parallel([
         Animated.timing(lineWidth, {
           toValue: 140,
@@ -83,16 +94,26 @@ export default function SplashScreen() {
       ]),
       // 5. Hold
       Animated.delay(1400),
-      // 6. Fade out everything
+      // 6. Fade out
       Animated.timing(exitOpacity, {
         toValue: 0,
         duration: 380,
         useNativeDriver: true,
       }),
     ]).start(() => {
-      router.replace('/(auth)/login');
+      // Auth-aware routing
+      if (!session) {
+        router.replace('/(auth)/login');
+        return;
+      }
+      const emailConfirmed = session?.user?.email_confirmed_at;
+      if (!emailConfirmed) {
+        router.replace('/verify-email');
+        return;
+      }
+      router.replace('/(tabs)/home');
     });
-  }, []);
+  }, [isLoading]); // re-triggers only when auth finishes loading
 
   return (
     <>
@@ -144,7 +165,6 @@ export default function SplashScreen() {
                 <View style={[styles.tower, styles.towerLeft]} />
                 {/* Main building body */}
                 <View style={styles.buildingBody}>
-                  {/* Windows grid 3×2 */}
                   {[0,1,2,3,4,5].map(i => (
                     <View key={i} style={styles.windowDot} />
                   ))}
@@ -153,7 +173,7 @@ export default function SplashScreen() {
                 <View style={[styles.tower, styles.towerRight]} />
               </View>
 
-              {/* Thermal arc (sun) overlay */}
+              {/* Thermal arc overlay */}
               <View style={styles.thermalArc}>
                 <Ionicons name="sunny-outline" size={22} color="#06B6D4" />
               </View>
@@ -212,7 +232,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#4F46E510',
     top: height * 0.22,
     alignSelf: 'center',
-    // Layered glow using shadow
     shadowColor: '#6366F1',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,

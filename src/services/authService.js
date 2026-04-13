@@ -1,7 +1,10 @@
 import { supabase } from './supabase';
 import { logError } from '@/src/utils/errorHandler';
+import * as FileSystem from 'expo-file-system/legacy';
+
 
 const APP_REDIRECT = 'com.adison.buildsense://auth-callback';
+
 
 export const signUp = async (email, password, displayName) => {
   try {
@@ -14,22 +17,17 @@ export const signUp = async (email, password, displayName) => {
       },
     });
 
-    // "Error sending confirmation email" means user was created
-    // but the email delivery failed. We treat this as a soft success
-    // so the user still lands on verify-email screen.
     if (error) {
       const isEmailDeliveryError =
         error.message?.toLowerCase().includes('sending confirmation email') ||
         error.message?.toLowerCase().includes('error sending');
 
       if (isEmailDeliveryError) {
-        // User exists, just email didn't send — still navigate to verify screen
-        // They can use the Resend button there
         logError('authService.signUp (email delivery only)', error);
-        return { data, error: null }; // treat as success
+        return { data, error: null };
       }
 
-      throw error; // real errors (duplicate email, weak password etc) still throw
+      throw error;
     }
 
     return { data, error: null };
@@ -38,6 +36,7 @@ export const signUp = async (email, password, displayName) => {
     return { data: null, error };
   }
 };
+
 
 export const signIn = async (email, password) => {
   try {
@@ -53,6 +52,7 @@ export const signIn = async (email, password) => {
   }
 };
 
+
 export const signOut = async () => {
   try {
     const { error } = await supabase.auth.signOut();
@@ -63,6 +63,7 @@ export const signOut = async () => {
     return { error };
   }
 };
+
 
 export const getCurrentUser = async () => {
   try {
@@ -75,9 +76,11 @@ export const getCurrentUser = async () => {
   }
 };
 
+
 export const onAuthStateChange = (callback) => {
   return supabase.auth.onAuthStateChange(callback);
 };
+
 
 export const updateProfile = async (userId, data) => {
   try {
@@ -92,6 +95,7 @@ export const updateProfile = async (userId, data) => {
     return { error };
   }
 };
+
 
 export const resendVerification = async (email) => {
   try {
@@ -110,27 +114,50 @@ export const resendVerification = async (email) => {
   }
 };
 
+
 export const uploadAvatar = async (userId, localUri) => {
   try {
-    const response = await fetch(localUri);
-    const blob     = await response.blob();
-    const ext      = localUri.split('.').pop()?.toLowerCase() ?? 'jpg';
+    const base64 = await FileSystem.readAsStringAsync(localUri, {
+      encoding: 'base64',
+    });
+
+    const ext      = localUri.split('.').pop()?.toLowerCase().split('?')[0] ?? 'jpg';
     const filePath = `${userId}/avatar.${ext}`;
+
+    const byteCharacters = atob(base64);
+    const byteArray = new Uint8Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteArray[i] = byteCharacters.charCodeAt(i);
+    }
 
     const { error: uploadError } = await supabase.storage
       .from('avatars')
-      .upload(filePath, blob, { upsert: true, contentType: `image/${ext}` });
+      .upload(filePath, byteArray, {
+        upsert: true,
+        contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+      });
 
     if (uploadError) throw uploadError;
 
     const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
     const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
+
+    // ✅ THE FIX — write avatar_url into the Supabase auth session's
+    // user_metadata so it survives app backgrounding and session refresh.
+    // onAuthStateChange will now always return a session with avatar_url set.
+    const { error: metaError } = await supabase.auth.updateUser({
+      data: { avatar_url: publicUrl },
+    });
+    if (metaError) logError('authService.uploadAvatar (updateUser metadata)', metaError);
+    // Non-fatal — URL is still returned even if metadata write fails
+
     return { url: publicUrl, error: null };
   } catch (error) {
     logError('authService.uploadAvatar', error);
     return { url: null, error };
   }
 };
+
 
 export const checkEmailConfirmed = async (email, password) => {
   try {

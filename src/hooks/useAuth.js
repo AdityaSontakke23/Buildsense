@@ -61,18 +61,15 @@ export const useAuth = () => {
 
   // NEW
   const updateAvatar = async (localUri) => {
-    if (!user?.id) return { error: new Error('No user') };
-    setLoading(true);
-    const { url, error } = await authUploadAvatar(user.id, localUri);
-    if (!error && url) {
-      // Persist url into profiles table
-      await updateProfile(user.id, { avatar_url: url });
-      // Refresh local user object so profile.jsx re-renders
-      setUser({ ...user, user_metadata: { ...user.user_metadata, avatar_url: url } });
-    }
-    setLoading(false);
-    return { url, error };
-  };
+  if (!user?.id) return { error: new Error('No user') };
+  // No setLoading — profile.jsx manages avatarUploading locally
+  const { url, error } = await authUploadAvatar(user.id, localUri);
+  if (!error && url) {
+    await updateProfile(user.id, { avatar_url: url });
+    setUser({ ...user, user_metadata: { ...user.user_metadata, avatar_url: url } });
+  }
+  return { url, error };
+};
 
   return { user, session, isLoading, error, signIn, signUp, signOut, resendVerification, updateAvatar };
 };

@@ -15,51 +15,70 @@ SplashScreen.preventAutoHideAsync();
 
 function RootLayoutInner() {
   const { session, isLoading } = useAuth();
-  const [hasRedirected, setHasRedirected] = useState(false);
-  const [splashShown, setSplashShown] = useState(false);
+  const [appReady, setAppReady] = useState(false);
 
-  // Hide the native expo splash immediately — our animated splash.jsx takes over
+  // Hide native splash immediately
   useEffect(() => {
     SplashScreen.hideAsync();
   }, []);
 
-  // Show our animated splash first, then do auth routing
-  useEffect(() => {
-    if (splashShown) return;
-    setSplashShown(true);
-    // Navigate to our animated splash screen immediately on mount
-    router.replace('/splash');
-  }, []);
-
-  // Deep link listener — handles auth-callback when app is open or cold launched
-  useEffect(() => {
-    const subscription = Linking.addEventListener('url', ({ url }) => {
-      if (url?.includes('auth-callback')) {
-        supabase.auth.getSession();
-      }
+  // Deep link listener
+  // Deep link listener — handles auth callbacks including password recovery
+useEffect(() => {
+  function parseTokensFromUrl(url) {
+    if (!url) return null;
+    const part = url.includes('#') ? url.split('#')[1] : url.split('?')[1];
+    if (!part) return null;
+    const map = {};
+    part.split('&').forEach(pair => {
+      const [k, v] = pair.split('=');
+      if (k) map[decodeURIComponent(k)] = decodeURIComponent(v || '');
     });
+    return map;
+  }
 
-    Linking.getInitialURL().then((url) => {
-      if (url?.includes('auth-callback')) {
-        supabase.auth.getSession();
+  async function handleUrl(url) {
+    if (!url?.includes('auth-callback')) return;
+    console.log('🔗 Deep link caught in _layout:', url);
+
+    const params = parseTokensFromUrl(url);
+    console.log('📦 Params:', params);
+
+    if (params?.access_token && params?.refresh_token) {
+      const { error } = await supabase.auth.setSession({
+        access_token: params.access_token,
+        refresh_token: params.refresh_token,
+      });
+      console.log('🔐 setSession error:', error);
+
+      if (!error) {
+        if (params.type === 'recovery') {
+          console.log('✅ Recovery → reset-password');
+          router.replace('/(auth)/reset-password');
+        } else {
+          console.log('✅ Verify → verified');
+          router.replace('/verify-email?verified=true');
+        }
       }
-    });
+    }
+  }
 
-    return () => subscription.remove();
-  }, []);
+  // App already open — deep link fires as event
+  const subscription = Linking.addEventListener('url', ({ url }) => handleUrl(url));
 
-  // Auth routing — only runs after splash has navigated away to login
-  // The splash.jsx handles router.replace('/(auth)/login') itself.
-  // This effect handles the case where the user is already logged in
-  // (splash.jsx always goes to login, login screen checks session via useAuth)
-  // So no extra routing needed here — but we keep it as a safety net
-  // for edge cases like deep links landing on root.
+  // App was cold started via deep link
+  Linking.getInitialURL().then(url => handleUrl(url));
+
+  return () => subscription.remove();
+}, []);
+
+  // Wait for auth to resolve, then route
   useEffect(() => {
-    if (isLoading) return;
-    if (hasRedirected) return;
-    // Don't redirect immediately — let splash.jsx animate first (≈3s)
-    // This fires only if somehow the user lands on root AFTER splash
-  }, [isLoading, session]);
+  if (isLoading) return;
+  if (appReady) return;
+  setAppReady(true);
+  router.replace('/splash');
+}, [isLoading]);
 
   if (isLoading) return <Loader fullScreen />;
 

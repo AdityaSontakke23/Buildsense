@@ -1,17 +1,21 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/hooks/useTheme';
 
+
 const TAB_ICONS = {
-  home: { active: 'home', inactive: 'home-outline' },
-  explore: { active: 'compass', inactive: 'compass-outline' },
-  saved: { active: 'bookmark', inactive: 'bookmark-outline' },
-  profile: { active: 'person', inactive: 'person-outline' },
+  home:    { active: 'home',     inactive: 'home-outline'     },
+  explore: { active: 'compass',  inactive: 'compass-outline'  },
+  saved:   { active: 'bookmark', inactive: 'bookmark-outline' },
+  profile: { active: 'person',   inactive: 'person-outline'   },
 };
+
 
 export default function TabsLayout() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -22,8 +26,9 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + insets.bottom,   // expands to absorb the gesture bar
+          paddingBottom: insets.bottom, // pushes tab content above the gesture bar
+          paddingTop: 8,
         },
         tabBarLabelStyle: {
           fontSize: 11,
@@ -36,9 +41,9 @@ export default function TabsLayout() {
         },
       })}
     >
-      <Tabs.Screen name="home" options={{ title: 'Home' }} />
+      <Tabs.Screen name="home"    options={{ title: 'Home'    }} />
       <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
-      <Tabs.Screen name="saved" options={{ title: 'Saved' }} />
+      <Tabs.Screen name="saved"   options={{ title: 'Saved'   }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
     </Tabs>
   );

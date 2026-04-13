@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, Pressable
+  View, Text, ScrollView, StyleSheet, Pressable, Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,7 +17,7 @@ import { truncateText } from '@/src/utils/helpers';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { GRADIENTS } from '@/src/hooks/useTheme';
 
-// Splits "Aditya Sontakke" → { first: "Aditya", last: "Sontakke" }
+
 const splitName = (name = '') => {
   const parts = name.trim().split(' ');
   return {
@@ -26,19 +26,18 @@ const splitName = (name = '') => {
   };
 };
 
-// Gets initials — "Aditya Sontakke" → "AS", "aditya" → "A"
 const getInitials = (name = '') => {
   const parts = name.trim().split(' ').filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return (parts[0]?.[0] ?? '?').toUpperCase();
 };
 
+
 export default function HomeScreen() {
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
   const { projects, isLoading, refreshProjects, deleteProject } = useProjects();
   const [showScoringModal, setShowScoringModal] = useState(false);
-  
 
   useEffect(() => { refreshProjects(); }, []);
 
@@ -47,12 +46,14 @@ export default function HomeScreen() {
     ?? 'there';
 
   const { first, last } = splitName(truncateText(displayName, 24));
-  const initials = getInitials(displayName);
+  const initials   = getInitials(displayName);
+  const avatarUrl  = user?.user_metadata?.avatar_url ?? null;  // ← NEW
   const recentProjects = projects.slice(0, 3);
 
   const handleProjectPress = useCallback((project) => {
     router.push(`/details/${project.id}`);
   }, []);
+
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
@@ -60,6 +61,7 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
+
         {/* ── Header ── */}
         <LinearGradient
           colors={isDark ? GRADIENTS.headerBg.dark : GRADIENTS.headerBg.light}
@@ -94,27 +96,14 @@ export default function HomeScreen() {
                 </Text>
               )}
 
-              {/* Accent line with BuildSense label */}
               <View style={styles.accentRow}>
-                {/* <View
-                  style={[
-                    styles.accentDot,
-                    { backgroundColor: colors.primary },
-                  ]}
-                /> */}
                 <Text style={[styles.accentLabel, { color: colors.primary }]}>
                   BuildSense
                 </Text>
-                {/* <View
-                  style={[
-                    styles.accentLine,
-                    { backgroundColor: colors.primary + "30" },
-                  ]}
-                /> */}
               </View>
             </View>
 
-            {/* Right: square avatar with initials */}
+            {/* ── Right: avatar — image if set, else initials ── */}
             <Pressable
               onPress={() => router.push("/(tabs)/profile")}
               style={[
@@ -125,9 +114,17 @@ export default function HomeScreen() {
                 },
               ]}
             >
-              <Text style={[styles.avatarInitials, { color: colors.primary }]}>
-                {initials}
-              </Text>
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={styles.avatarImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text style={[styles.avatarInitials, { color: colors.primary }]}>
+                  {initials}
+                </Text>
+              )}
               <View
                 style={[
                   styles.avatarOnline,
@@ -419,6 +416,7 @@ export default function HomeScreen() {
   );
 }
 
+
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   scroll: { paddingBottom: SPACING.xl + 16 },
@@ -463,23 +461,16 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
     marginTop: SPACING.sm,
   },
-  accentDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
+  accentDot:  { width: 6, height: 6, borderRadius: 3 },
   accentLabel: {
     ...TYPOGRAPHY.caption,
     fontWeight: '700',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
-  accentLine: {
-    flex: 1,
-    height: 1,
-  },
+  accentLine: { flex: 1, height: 1 },
 
-  // Square avatar with initials
+  // Square avatar
   avatar: {
     width: 48,
     height: 48,
@@ -489,6 +480,12 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     marginLeft: SPACING.md,
     position: 'relative',
+    overflow: 'hidden',   // ← needed so Image clips to borderRadius
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
   },
   avatarInitials: {
     fontSize: 16,
@@ -506,12 +503,7 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
 
-  // Rest of content padded
-  heroCard: {
-  // remove backgroundColor here — gradient handles it
-  borderRadius: 16,
-  padding: SPACING.lg,
-},
+  heroCard: { borderRadius: 16, padding: SPACING.lg },
   heroTop: { marginBottom: SPACING.xs },
   heroBadge: {
     flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
@@ -526,10 +518,7 @@ const styles = StyleSheet.create({
     borderRadius: 10, gap: 6,
   },
   heroBtnText: { ...TYPOGRAPHY.body, color: '#FFFFFF', fontWeight: '700' },
-
-  heroGradient: {
-  borderRadius: 16,
-},
+  heroGradient: { borderRadius: 16 },
 
   savedCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

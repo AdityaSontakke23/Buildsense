@@ -58,19 +58,21 @@ export default function ProfileScreen() {
   const { projects } = useProjects();
   const [avatarUploading, setAvatarUploading] = useState(false);
 
-  const displayName  = user?.user_metadata?.display_name ?? user?.email?.split('@')[0] ?? 'User';
-  const email        = user?.email ?? '';
+  // Local avatar URL — reflects immediately after upload without waiting for auth refresh
+  const [localAvatarUrl, setLocalAvatarUrl] = useState(
+    user?.user_metadata?.avatar_url ?? null
+  );
+
+  const displayName   = user?.user_metadata?.display_name ?? user?.email?.split('@')[0] ?? 'User';
+  const email         = user?.email ?? '';
   const totalProjects = projects.length;
-  const avgScore     = getAverageScore(projects);
-  const initials     = getInitials(displayName);
-
-  // Avatar URL — prefer freshly updated metadata, fallback to profiles table url
-  const avatarUrl = user?.user_metadata?.avatar_url ?? null;
+  const avgScore      = getAverageScore(projects);
+  const initials      = getInitials(displayName);
+  const avatarUrl     = localAvatarUrl;
 
 
-  // ── Image picker ────────────────────────────────────────────
+  // ── Image picker ──────────────────────────────────────────
   const handlePickAvatar = async () => {
-    // Ask permission
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(
@@ -81,7 +83,7 @@ export default function ProfileScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType.IMAGE, // ← only change
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -91,11 +93,13 @@ export default function ProfileScreen() {
 
     const localUri = result.assets[0].uri;
     setAvatarUploading(true);
-    const { error } = await updateAvatar(localUri);
+    const { url, error } = await updateAvatar(localUri);
     setAvatarUploading(false);
 
     if (error) {
       Alert.alert('Upload Failed', 'Could not upload your photo. Please try again.');
+    } else if (url) {
+      setLocalAvatarUrl(url); // immediately reflects in UI
     }
   };
 
@@ -341,7 +345,6 @@ const styles = StyleSheet.create({
   },
   avatarInitials: { fontSize: 28, fontWeight: '800', color: '#FFFFFF' },
 
-  // Camera badge — sits bottom-right of the avatar
   cameraBadge: {
     position: 'absolute', bottom: -4, right: -4,
     width: 22, height: 22, borderRadius: 11,
@@ -349,9 +352,9 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: '#FFFFFF',
   },
 
-  nameText:       { ...TYPOGRAPHY.h3, color: '#FFFFFF', fontWeight: '700' },
-  emailText:      { ...TYPOGRAPHY.bodySmall, color: '#FFFFFFB0', marginTop: 4 },
-  changePhotoText:{ ...TYPOGRAPHY.caption, color: '#FFFFFFA0', marginTop: 6, marginBottom: 2 },
+  nameText:        { ...TYPOGRAPHY.h3, color: '#FFFFFF', fontWeight: '700' },
+  emailText:       { ...TYPOGRAPHY.bodySmall, color: '#FFFFFFB0', marginTop: 4 },
+  changePhotoText: { ...TYPOGRAPHY.caption, color: '#FFFFFFA0', marginTop: 6, marginBottom: 2 },
 
   verifiedChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -370,9 +373,9 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
   },
-  statTopBar:  { width: '100%', height: 3, marginBottom: SPACING.sm },
-  statValue:   { ...TYPOGRAPHY.h2, fontWeight: '800' },
-  statLabel:   { ...TYPOGRAPHY.caption },
+  statTopBar: { width: '100%', height: 3, marginBottom: SPACING.sm },
+  statValue:  { ...TYPOGRAPHY.h2, fontWeight: '800' },
+  statLabel:  { ...TYPOGRAPHY.caption },
 
   // Section labels
   sectionLabelRow: {
