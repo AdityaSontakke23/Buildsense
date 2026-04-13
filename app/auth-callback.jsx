@@ -8,21 +8,18 @@ export default function AuthCallbackScreen() {
 
   useEffect(() => {
     const handleCallback = async () => {
-      // Extract tokens from the deep link params
-      const access_token = params.access_token;
+      const access_token  = params.access_token;
       const refresh_token = params.refresh_token;
 
       if (access_token && refresh_token) {
-        const { error } = await supabase.auth.setSession({
-          access_token,
-          refresh_token,
-        });
+        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
         if (!error) {
-          router.replace('/(tabs)/home');
+          // Route back to verify-email screen with verified flag
+          // That screen shows the success animation then lets user in
+          router.replace('/verify-email?verified=true');
           return;
         }
       }
-      // If something went wrong, go back to login
       router.replace('/(auth)/login');
     };
 

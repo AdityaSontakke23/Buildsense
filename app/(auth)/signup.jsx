@@ -17,17 +17,17 @@ export default function SignupScreen() {
   const { colors } = useTheme();
 
   const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail]             = useState('');
+  const [password, setPassword]       = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
 
   const validate = () => {
     const errors = {};
     if (!validateProjectName(displayName)) errors.displayName = 'Name cannot be empty';
-    if (!validateEmail(email)) errors.email = 'Enter a valid email address';
-    if (!validatePassword(password)) errors.password = 'Password must be at least 6 characters';
-    if (password !== confirmPassword) errors.confirmPassword = 'Passwords do not match';
+    if (!validateEmail(email))             errors.email       = 'Enter a valid email address';
+    if (!validatePassword(password))       errors.password    = 'Password must be at least 6 characters';
+    if (password !== confirmPassword)      errors.confirmPassword = 'Passwords do not match';
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -35,7 +35,12 @@ export default function SignupScreen() {
   const handleSignup = async () => {
     if (!validate()) return;
     const { error } = await signUp(email, password, displayName);
-    if (!error) router.replace('/(tabs)/home');
+    if (!error) {
+      // Pass email as param — don't trust auth store timing
+      router.replace(
+  `/verify-email?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`
+);
+    }
   };
 
   return (
@@ -46,15 +51,11 @@ export default function SignupScreen() {
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
-          {/* Header */}
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.primary }]}>BuildSense</Text>
-            <Text style={[styles.subtitle, { color: colors.textLight }]}>
-              Create your account
-            </Text>
+            <Text style={[styles.subtitle, { color: colors.textLight }]}>Create your account</Text>
           </View>
 
-          {/* Form Card */}
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.formTitle, { color: colors.text }]}>Get started</Text>
 
@@ -64,51 +65,16 @@ export default function SignupScreen() {
               </View>
             )}
 
-            <Input
-              label="Full Name"
-              value={displayName}
-              onChangeText={setDisplayName}
-              placeholder="Aditya Sharma"
-              error={fieldErrors.displayName}
-            />
-            <Input
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@email.com"
-              keyboardType="email-address"
-              error={fieldErrors.email}
-            />
-            <Input
-              label="Password"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Min. 6 characters"
-              secureTextEntry
-              error={fieldErrors.password}
-            />
-            <Input
-              label="Confirm Password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Re-enter password"
-              secureTextEntry
-              error={fieldErrors.confirmPassword}
-            />
+            <Input label="Full Name"         value={displayName}      onChangeText={setDisplayName}      placeholder="Aditya Sharma"      error={fieldErrors.displayName} />
+            <Input label="Email"             value={email}            onChangeText={setEmail}            placeholder="you@email.com"      keyboardType="email-address" error={fieldErrors.email} />
+            <Input label="Password"          value={password}         onChangeText={setPassword}         placeholder="Min. 6 characters"  secureTextEntry error={fieldErrors.password} />
+            <Input label="Confirm Password"  value={confirmPassword}  onChangeText={setConfirmPassword}  placeholder="Re-enter password"  secureTextEntry error={fieldErrors.confirmPassword} />
 
-            <Button
-              title="Create Account"
-              onPress={handleSignup}
-              isLoading={isLoading}
-              style={styles.btn}
-            />
+            <Button title="Create Account" onPress={handleSignup} isLoading={isLoading} style={styles.btn} />
           </View>
 
-          {/* Footer */}
           <View style={styles.footer}>
-            <Text style={[styles.footerText, { color: colors.textLight }]}>
-              Already have an account?{' '}
-            </Text>
+            <Text style={[styles.footerText, { color: colors.textLight }]}>Already have an account? </Text>
             <Pressable onPress={() => router.back()}>
               <Text style={[styles.footerLink, { color: colors.primary }]}>Log in</Text>
             </Pressable>
@@ -128,10 +94,9 @@ const styles = StyleSheet.create({
   title: { ...TYPOGRAPHY.h1, fontWeight: '800', letterSpacing: 0.5 },
   subtitle: { ...TYPOGRAPHY.bodySmall, marginTop: SPACING.xs },
   card: {
-    borderRadius: 16, padding: SPACING.lg,
-    borderWidth: 1.5, marginBottom: SPACING.lg,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
+    borderRadius: 16, padding: SPACING.lg, borderWidth: 1.5,
+    marginBottom: SPACING.lg, shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
   },
   formTitle: { ...TYPOGRAPHY.h2, marginBottom: SPACING.lg },
   errorBanner: { padding: SPACING.sm, borderRadius: 8, marginBottom: SPACING.md },

@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, Alert,
-  ScrollView, Pressable, Switch
+  ScrollView, Pressable, Switch, Image, ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import Button from '@/src/components/common/Button';
 import { useAuth } from '@/src/hooks/useAuth';
 import { useTheme } from '@/src/hooks/useTheme';
@@ -14,11 +15,13 @@ import { useProjects } from '@/src/hooks/useProjects';
 import { SPACING, TYPOGRAPHY } from '@/src/utils/constants';
 import { getAverageScore } from '@/src/utils/helpers';
 
+
 const getInitials = (name = '') => {
   const parts = name.trim().split(' ').filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return (parts[0]?.[0] ?? '?').toUpperCase();
 };
+
 
 const SettingRow = ({ icon, label, value, onPress, rightEl, colors, active }) => (
   <Pressable
@@ -48,16 +51,54 @@ const SettingRow = ({ icon, label, value, onPress, rightEl, colors, active }) =>
   </Pressable>
 );
 
+
 export default function ProfileScreen() {
-  const { user, signOut, isLoading } = useAuth();
+  const { user, signOut, isLoading, updateAvatar } = useAuth();
   const { colors, isDark, toggleTheme } = useTheme();
   const { projects } = useProjects();
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
-  const displayName = user?.user_metadata?.display_name ?? user?.email?.split('@')[0] ?? 'User';
-  const email = user?.email ?? '';
+  const displayName  = user?.user_metadata?.display_name ?? user?.email?.split('@')[0] ?? 'User';
+  const email        = user?.email ?? '';
   const totalProjects = projects.length;
-  const avgScore = getAverageScore(projects);
-  const initials = getInitials(displayName);
+  const avgScore     = getAverageScore(projects);
+  const initials     = getInitials(displayName);
+
+  // Avatar URL — prefer freshly updated metadata, fallback to profiles table url
+  const avatarUrl = user?.user_metadata?.avatar_url ?? null;
+
+
+  // ── Image picker ────────────────────────────────────────────
+  const handlePickAvatar = async () => {
+    // Ask permission
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Required',
+        'Please allow access to your photo library in Settings to upload a profile photo.',
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaType.IMAGE, // ← only change
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled) return;
+
+    const localUri = result.assets[0].uri;
+    setAvatarUploading(true);
+    const { error } = await updateAvatar(localUri);
+    setAvatarUploading(false);
+
+    if (error) {
+      Alert.alert('Upload Failed', 'Could not upload your photo. Please try again.');
+    }
+  };
+
 
   const handleLogout = () => {
     Alert.alert(
@@ -76,6 +117,7 @@ export default function ProfileScreen() {
       ]
     );
   };
+
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
@@ -98,20 +140,45 @@ export default function ProfileScreen() {
           <View style={styles.decCircle1} />
           <View style={styles.decCircle2} />
 
-          {/* Avatar with gradient ring */}
-          <LinearGradient
-            colors={['#9760d2', '#7ee887', '#F5D9B0']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.avatarRing}
-          >
-            <View style={styles.avatarInner}>
-              <Text style={styles.avatarInitials}>{initials}</Text>
+          {/* ── Tappable Avatar ── */}
+          <Pressable onPress={handlePickAvatar} disabled={avatarUploading} style={styles.avatarPressable}>
+            <LinearGradient
+              colors={['#9760d2', '#7ee887', '#F5D9B0']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.avatarRing}
+            >
+              <View style={styles.avatarInner}>
+                {avatarUrl ? (
+                  <Image
+                    source={{ uri: avatarUrl }}
+                    style={styles.avatarImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Text style={styles.avatarInitials}>{initials}</Text>
+                )}
+              </View>
+            </LinearGradient>
+
+            {/* Camera overlay badge */}
+            <View style={[styles.cameraBadge, { backgroundColor: colors.primary }]}>
+              {avatarUploading
+                ? <ActivityIndicator size={10} color="#FFFFFF" />
+                : <Ionicons name="camera" size={11} color="#FFFFFF" />
+              }
             </View>
-          </LinearGradient>
+          </Pressable>
 
           <Text style={styles.nameText}>{displayName}</Text>
           <Text style={styles.emailText}>{email}</Text>
+
+          {/* Change photo hint */}
+          <Pressable onPress={handlePickAvatar} disabled={avatarUploading}>
+            <Text style={styles.changePhotoText}>
+              {avatarUploading ? 'Uploading…' : 'Tap avatar to change photo'}
+            </Text>
+          </Pressable>
 
           {/* Verified chip */}
           <View style={styles.verifiedChip}>
@@ -231,8 +298,9 @@ export default function ProfileScreen() {
   );
 }
 
+
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
+  safe:   { flex: 1 },
   scroll: { padding: SPACING.lg, paddingBottom: SPACING.xl + 16 },
 
   pageTitle: { ...TYPOGRAPHY.h2, fontWeight: '800', marginBottom: SPACING.lg },
@@ -253,24 +321,43 @@ const styles = StyleSheet.create({
     borderRadius: 50, backgroundColor: '#FFFFFF08',
     bottom: -20, left: -20,
   },
+
+  // Avatar
+  avatarPressable: { marginBottom: SPACING.md },
   avatarRing: {
     width: 80, height: 80, borderRadius: 22,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: SPACING.md, padding: 2.5,
+    padding: 2.5,
   },
   avatarInner: {
     flex: 1, width: '100%', borderRadius: 20,
     backgroundColor: '#1E1040',
     alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%', height: '100%',
+    borderRadius: 20,
   },
   avatarInitials: { fontSize: 28, fontWeight: '800', color: '#FFFFFF' },
-  nameText: { ...TYPOGRAPHY.h3, color: '#FFFFFF', fontWeight: '700' },
-  emailText: { ...TYPOGRAPHY.bodySmall, color: '#FFFFFFB0', marginTop: 4 },
+
+  // Camera badge — sits bottom-right of the avatar
+  cameraBadge: {
+    position: 'absolute', bottom: -4, right: -4,
+    width: 22, height: 22, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: '#FFFFFF',
+  },
+
+  nameText:       { ...TYPOGRAPHY.h3, color: '#FFFFFF', fontWeight: '700' },
+  emailText:      { ...TYPOGRAPHY.bodySmall, color: '#FFFFFFB0', marginTop: 4 },
+  changePhotoText:{ ...TYPOGRAPHY.caption, color: '#FFFFFFA0', marginTop: 6, marginBottom: 2 },
+
   verifiedChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: '#FFFFFF20', borderRadius: 20,
     paddingHorizontal: SPACING.sm, paddingVertical: 4,
-    marginTop: SPACING.md,
+    marginTop: SPACING.sm,
   },
   verifiedText: { ...TYPOGRAPHY.caption, color: '#FFFFFF', fontWeight: '600' },
 
@@ -283,9 +370,9 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
   },
-  statTopBar: { width: '100%', height: 3, marginBottom: SPACING.sm },
-  statValue: { ...TYPOGRAPHY.h2, fontWeight: '800' },
-  statLabel: { ...TYPOGRAPHY.caption },
+  statTopBar:  { width: '100%', height: 3, marginBottom: SPACING.sm },
+  statValue:   { ...TYPOGRAPHY.h2, fontWeight: '800' },
+  statLabel:   { ...TYPOGRAPHY.caption },
 
   // Section labels
   sectionLabelRow: {
@@ -293,7 +380,7 @@ const styles = StyleSheet.create({
     gap: SPACING.xs, marginBottom: SPACING.sm, marginTop: SPACING.sm,
   },
   sectionAccent: { width: 3, height: 14, borderRadius: 2 },
-  sectionLabel: { ...TYPOGRAPHY.caption, fontWeight: '700', letterSpacing: 1 },
+  sectionLabel:  { ...TYPOGRAPHY.caption, fontWeight: '700', letterSpacing: 1 },
 
   // Settings card
   settingsCard: {
@@ -311,16 +398,16 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginRight: SPACING.md,
   },
-  settingLabel: { ...TYPOGRAPHY.body, flex: 1 },
-  settingRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  settingValue: { ...TYPOGRAPHY.bodySmall },
+  settingLabel:  { ...TYPOGRAPHY.body, flex: 1 },
+  settingRight:  { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  settingValue:  { ...TYPOGRAPHY.bodySmall },
 
   aboutContent: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.md },
   bulletRow: {
     flexDirection: 'row', alignItems: 'flex-start',
     gap: SPACING.sm, marginBottom: SPACING.xs,
   },
-  bullet: { width: 6, height: 6, borderRadius: 3, marginTop: 6 },
+  bullet:     { width: 6, height: 6, borderRadius: 3, marginTop: 6 },
   bulletText: { ...TYPOGRAPHY.bodySmall, flex: 1, lineHeight: 20 },
 
   privacyText: {
@@ -334,5 +421,5 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   versionText: { ...TYPOGRAPHY.caption },
-  logoutBtn: { marginBottom: SPACING.sm },
+  logoutBtn:   { marginBottom: SPACING.sm },
 });
