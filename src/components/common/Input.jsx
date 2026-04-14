@@ -1,11 +1,28 @@
 import React from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/src/hooks/useTheme';
 import { SPACING, TYPOGRAPHY } from '@/src/utils/constants';
 
-const Input = ({ label, value, onChangeText, error, secureTextEntry = false,
-  leftIcon, placeholder, keyboardType = 'default', style }) => {
+const Input = ({
+  label, value, onChangeText, error, success,
+  secureTextEntry = false, leftIcon, placeholder,
+  keyboardType = 'default', style
+}) => {
   const { colors } = useTheme();
+
+  // Border color priority: error → success → default
+  const borderColor = error
+    ? colors.error
+    : success
+    ? '#16a34a'
+    : colors.border;
+
+  const bgColor = error
+    ? colors.error + '08'
+    : success
+    ? '#16a34a08'
+    : colors.surface;
 
   return (
     <View style={[styles.wrapper, style]}>
@@ -14,7 +31,7 @@ const Input = ({ label, value, onChangeText, error, secureTextEntry = false,
       )}
       <View style={[
         styles.inputRow,
-        { borderColor: error ? colors.error : colors.border, backgroundColor: colors.surface },
+        { borderColor, backgroundColor: bgColor },
       ]}>
         {leftIcon && <View style={styles.icon}>{leftIcon}</View>}
         <TextInput
@@ -27,9 +44,17 @@ const Input = ({ label, value, onChangeText, error, secureTextEntry = false,
           style={[styles.input, { color: colors.text }]}
           autoCapitalize="none"
         />
+        {/* Success checkmark */}
+        {success && !error && (
+          <Ionicons name="checkmark-circle" size={20} color="#16a34a" style={styles.statusIcon} />
+        )}
+        {/* Error X icon */}
+        {error && (
+          <Ionicons name="close-circle" size={20} color={colors.error} style={styles.statusIcon} />
+        )}
       </View>
       {error && (
-        <Text style={[styles.error, { color: colors.error }]}>{error}</Text>
+        <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
       )}
     </View>
   );
@@ -48,7 +73,8 @@ const styles = StyleSheet.create({
   },
   icon: { marginRight: SPACING.sm },
   input: { flex: 1, ...TYPOGRAPHY.body, paddingVertical: SPACING.sm },
-  error: { ...TYPOGRAPHY.caption, marginTop: SPACING.xs },
+  statusIcon: { marginLeft: SPACING.sm },
+  errorText: { ...TYPOGRAPHY.caption, marginTop: SPACING.xs },
 });
 
 export default React.memo(Input);

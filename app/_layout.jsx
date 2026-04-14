@@ -1,5 +1,5 @@
 import 'react-native-url-polyfill/auto';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View } from 'react-native';
 import { Slot, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -7,15 +7,28 @@ import * as Linking from 'expo-linking';
 import { Provider } from 'react-redux';
 import { reduxStore } from '@/src/store/redux/store';
 import { useAuth } from '@/src/hooks/useAuth';
+import { useAuthStore } from '@/src/store/authStore';
+import { onAuthStateChange } from '@/src/services/authService';
 import { supabase } from '@/src/services/supabase';
 import Loader from '@/src/components/common/Loader';
 
-// Keep native splash visible until JS splash takes over
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutInner() {
-  const { session, isLoading } = useAuth();
-  const [appReady, setAppReady] = useState(false);
+  const { isLoading } = useAuth();
+  const hasRouted = useRef(false);
+
+  // Single, app-wide auth state listener
+  useEffect(() => {
+    const { data: { subscription } } = onAuthStateChange((event, session) => {
+      console.log('🔥 authStateChange event:', event, '| session:', !!session);
+      const { setSession, setUser, session: currentSession } = useAuthStore.getState();
+      if (event === 'SIGNED_OUT' && !session && !currentSession) return;
+      setSession(session);
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Hide native splash immediately
   useEffect(() => {
@@ -23,64 +36,51 @@ function RootLayoutInner() {
   }, []);
 
   // Deep link listener
-  // Deep link listener — handles auth callbacks including password recovery
-useEffect(() => {
-  function parseTokensFromUrl(url) {
-    if (!url) return null;
-    const part = url.includes('#') ? url.split('#')[1] : url.split('?')[1];
-    if (!part) return null;
-    const map = {};
-    part.split('&').forEach(pair => {
-      const [k, v] = pair.split('=');
-      if (k) map[decodeURIComponent(k)] = decodeURIComponent(v || '');
-    });
-    return map;
-  }
-
-  async function handleUrl(url) {
-    if (!url?.includes('auth-callback')) return;
-    console.log('🔗 Deep link caught in _layout:', url);
-
-    const params = parseTokensFromUrl(url);
-    console.log('📦 Params:', params);
-
-    if (params?.access_token && params?.refresh_token) {
-      const { error } = await supabase.auth.setSession({
-        access_token: params.access_token,
-        refresh_token: params.refresh_token,
+  useEffect(() => {
+    function parseTokensFromUrl(url) {
+      if (!url) return null;
+      const part = url.includes('#') ? url.split('#')[1] : url.split('?')[1];
+      if (!part) return null;
+      const map = {};
+      part.split('&').forEach(pair => {
+        const [k, v] = pair.split('=');
+        if (k) map[decodeURIComponent(k)] = decodeURIComponent(v || '');
       });
-      console.log('🔐 setSession error:', error);
+      return map;
+    }
 
-      if (!error) {
-        if (params.type === 'recovery') {
-          console.log('✅ Recovery → reset-password');
-          router.replace('/(auth)/reset-password');
-        } else {
-          console.log('✅ Verify → verified');
-          router.replace('/verify-email?verified=true');
+    async function handleUrl(url) {
+      if (!url?.includes('auth-callback')) return;
+      const params = parseTokensFromUrl(url);
+      if (params?.access_token && params?.refresh_token) {
+        const { error } = await supabase.auth.setSession({
+          access_token: params.access_token,
+          refresh_token: params.refresh_token,
+        });
+        if (!error) {
+          if (params.type === 'recovery') router.replace('/(auth)/reset-password');
+          else router.replace('/verify-email?verified=true');
         }
       }
     }
-  }
 
-  // App already open — deep link fires as event
-  const subscription = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    const subscription = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    Linking.getInitialURL().then(url => handleUrl(url));
+    return () => subscription.remove();
+  }, []);
 
-  // App was cold started via deep link
-  Linking.getInitialURL().then(url => handleUrl(url));
-
-  return () => subscription.remove();
-}, []);
-
-  // Wait for auth to resolve, then route
+  // Route to splash exactly once on cold start
   useEffect(() => {
-  if (isLoading) return;
-  if (appReady) return;
-  setAppReady(true);
-  router.replace('/splash');
-}, [isLoading]);
+    console.log('📍 _layout isLoading effect | isLoading:', isLoading, '| hasRouted:', hasRouted.current);
+    if (isLoading) return;
+    if (hasRouted.current) return;
+    hasRouted.current = true;
+    router.replace('/splash');
+  }, [isLoading]);
 
-  if (isLoading) return <Loader fullScreen />;
+  // ✅ REMOVED: if (isLoading) return <Loader fullScreen />;
+  // That line was unmounting <Slot /> during login attempts, causing blank screen.
+  // Each screen manages its own loading state via its Button's isLoading prop.
 
   return (
     <View style={{ flex: 1 }}>

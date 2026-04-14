@@ -1,10 +1,8 @@
-import { useEffect } from 'react';
 import { useAuthStore } from '@/src/store/authStore';
 import {
   signIn as authSignIn,
   signUp as authSignUp,
   signOut as authSignOut,
-  onAuthStateChange,
   resendVerification as authResend,
   uploadAvatar as authUploadAvatar,
   updateProfile,
@@ -17,22 +15,21 @@ export const useAuth = () => {
     setUser, setSession, clearAuth, setLoading, setError,
   } = useAuthStore();
 
-  useEffect(() => {
-    const { data: { subscription } } = onAuthStateChange((event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+  // ✅ NO onAuthStateChange listener here anymore
+  // It lives in _layout.jsx and runs exactly once for the entire app
 
   const signIn = async (email, password) => {
     setLoading(true);
     setError(null);
     const { data, error } = await authSignIn(email, password);
-    if (error) setError(parseSupabaseError(error));
-    else { setSession(data.session); setUser(data.user); }
     setLoading(false);
-    return { data, error };
+    if (error) {
+      setError(parseSupabaseError(error));
+      return { data: null, error };
+    }
+    setSession(data.session);
+    setUser(data.user);
+    return { data, error: null };
   };
 
   const signUp = async (email, password, displayName) => {
@@ -52,24 +49,20 @@ export const useAuth = () => {
     setLoading(false);
   };
 
-  // NEW
   const resendVerification = async (email) => {
-    // Do NOT call setLoading here — it triggers _layout.jsx redirect guard
     const { error } = await authResend(email);
     return { error };
   };
 
-  // NEW
   const updateAvatar = async (localUri) => {
-  if (!user?.id) return { error: new Error('No user') };
-  // No setLoading — profile.jsx manages avatarUploading locally
-  const { url, error } = await authUploadAvatar(user.id, localUri);
-  if (!error && url) {
-    await updateProfile(user.id, { avatar_url: url });
-    setUser({ ...user, user_metadata: { ...user.user_metadata, avatar_url: url } });
-  }
-  return { url, error };
-};
+    if (!user?.id) return { error: new Error('No user') };
+    const { url, error } = await authUploadAvatar(user.id, localUri);
+    if (!error && url) {
+      await updateProfile(user.id, { avatar_url: url });
+      setUser({ ...user, user_metadata: { ...user.user_metadata, avatar_url: url } });
+    }
+    return { url, error };
+  };
 
   return { user, session, isLoading, error, signIn, signUp, signOut, resendVerification, updateAvatar };
 };

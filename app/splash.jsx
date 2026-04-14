@@ -12,6 +12,12 @@ const { width, height } = Dimensions.get('window');
 export default function SplashScreen() {
   const { session, isLoading } = useAuth();
 
+  // ✅ Always reflects the latest session without re-triggering the effect
+  const sessionRef = useRef(session);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
   const logoScale      = useRef(new Animated.Value(0.5)).current;
   const logoOpacity    = useRef(new Animated.Value(0)).current;
   const glowScale      = useRef(new Animated.Value(0.6)).current;
@@ -26,184 +32,98 @@ export default function SplashScreen() {
   const animationStarted = useRef(false);
 
   useEffect(() => {
-    // Wait for auth to resolve before starting animation
     if (isLoading) return;
-    // Only run once
     if (animationStarted.current) return;
     animationStarted.current = true;
 
     Animated.sequence([
-      // 1. Glow blob expands first
       Animated.parallel([
-        Animated.timing(glowOpacity, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.spring(glowScale, {
-          toValue: 1,
-          tension: 40,
-          friction: 10,
-          useNativeDriver: true,
-        }),
+        Animated.timing(glowOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.spring(glowScale, { toValue: 1, tension: 40, friction: 10, useNativeDriver: true }),
       ]),
-      // 2. Logo springs in
       Animated.parallel([
-        Animated.spring(logoScale, {
-          toValue: 1,
-          tension: 55,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-        Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 380,
-          useNativeDriver: true,
-        }),
+        Animated.spring(logoScale, { toValue: 1, tension: 55, friction: 7, useNativeDriver: true }),
+        Animated.timing(logoOpacity, { toValue: 1, duration: 380, useNativeDriver: true }),
       ]),
-      // 3. Wordmark slides up + fades in
       Animated.parallel([
-        Animated.timing(textOpacity, {
-          toValue: 1,
-          duration: 320,
-          useNativeDriver: true,
-        }),
-        Animated.timing(textY, {
-          toValue: 0,
-          duration: 320,
-          useNativeDriver: true,
-        }),
+        Animated.timing(textOpacity, { toValue: 1, duration: 320, useNativeDriver: true }),
+        Animated.timing(textY, { toValue: 0, duration: 320, useNativeDriver: true }),
       ]),
-      // 4. Accent line + tagline + version
       Animated.parallel([
-        Animated.timing(lineWidth, {
-          toValue: 140,
-          duration: 450,
-          useNativeDriver: false,
-        }),
-        Animated.timing(tagOpacity, {
-          toValue: 1,
-          duration: 450,
-          useNativeDriver: true,
-        }),
-        Animated.timing(versionOpacity, {
-          toValue: 1,
-          duration: 450,
-          useNativeDriver: true,
-        }),
+        Animated.timing(lineWidth, { toValue: 140, duration: 450, useNativeDriver: false }),
+        Animated.timing(tagOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
+        Animated.timing(versionOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
       ]),
-      // 5. Hold
       Animated.delay(1400),
-      // 6. Fade out
-      Animated.timing(exitOpacity, {
-        toValue: 0,
-        duration: 380,
-        useNativeDriver: true,
-      }),
+      Animated.timing(exitOpacity, { toValue: 0, duration: 380, useNativeDriver: true }),
     ]).start(() => {
-      // Auth-aware routing
-      if (!session) {
+      // ✅ Read from ref — always gets current session, not stale closure value
+      const currentSession = sessionRef.current;
+
+      if (!currentSession) {
         router.replace('/(auth)/login');
         return;
       }
-      const emailConfirmed = session?.user?.email_confirmed_at;
+      const emailConfirmed = currentSession?.user?.email_confirmed_at;
       if (!emailConfirmed) {
         router.replace('/verify-email');
         return;
       }
       router.replace('/(tabs)/home');
     });
-  }, [isLoading]); // re-triggers only when auth finishes loading
+  }, [isLoading]);
 
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="#0C0820" />
       <Animated.View style={[styles.root, { opacity: exitOpacity }]}>
 
-        {/* Background gradient */}
         <LinearGradient
           colors={['#160F2E', '#0C0820', '#080614']}
           locations={[0, 0.55, 1]}
           style={StyleSheet.absoluteFill}
         />
 
-        {/* Radial glow behind logo */}
         <Animated.View
-          style={[
-            styles.glowBlob,
-            {
-              opacity: glowOpacity,
-              transform: [{ scale: glowScale }],
-            },
-          ]}
+          style={[styles.glowBlob, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]}
         />
 
-        {/* Secondary subtle glow bottom-right */}
         <View style={styles.glowBlobSecondary} />
 
-        {/* ── Logo Mark ── */}
         <Animated.View
-          style={[
-            styles.logoWrap,
-            {
-              opacity: logoOpacity,
-              transform: [{ scale: logoScale }],
-            },
-          ]}
+          style={[styles.logoWrap, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}
         >
           <View style={styles.markContainer}>
-
-            {/* Outer glow ring */}
             <View style={styles.glowRing} />
-
-            {/* Icon circle */}
             <View style={styles.iconCircle}>
-
-              {/* Building silhouette */}
               <View style={styles.buildingWrap}>
-                {/* Left tower */}
                 <View style={[styles.tower, styles.towerLeft]} />
-                {/* Main building body */}
                 <View style={styles.buildingBody}>
                   {[0,1,2,3,4,5].map(i => (
                     <View key={i} style={styles.windowDot} />
                   ))}
                 </View>
-                {/* Right tower */}
                 <View style={[styles.tower, styles.towerRight]} />
               </View>
-
-              {/* Thermal arc overlay */}
               <View style={styles.thermalArc}>
                 <Ionicons name="sunny-outline" size={22} color="#06B6D4" />
               </View>
-
             </View>
           </View>
         </Animated.View>
 
-        {/* ── Wordmark ── */}
         <Animated.Text
-          style={[
-            styles.wordmark,
-            {
-              opacity: textOpacity,
-              transform: [{ translateY: textY }],
-            },
-          ]}
+          style={[styles.wordmark, { opacity: textOpacity, transform: [{ translateY: textY }] }]}
         >
           Build<Text style={styles.wordmarkAccent}>Sense</Text>
         </Animated.Text>
 
-        {/* ── Cyan accent line ── */}
         <Animated.View style={[styles.accentLine, { width: lineWidth }]} />
 
-        {/* ── Tagline ── */}
         <Animated.Text style={[styles.tagline, { opacity: tagOpacity }]}>
           Location-aware thermal insights
         </Animated.Text>
 
-        {/* ── Version badge ── */}
         <Animated.View style={[styles.versionWrap, { opacity: versionOpacity }]}>
           <Text style={styles.version}>v 1.0</Text>
         </Animated.View>
@@ -222,8 +142,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#0C0820',
   },
-
-  // ── Glow blobs ──
   glowBlob: {
     position: 'absolute',
     width: 340,
@@ -250,8 +168,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 60,
   },
-
-  // ── Logo mark ──
   logoWrap: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -290,8 +206,6 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
-
-  // ── Building inside icon ──
   buildingWrap: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -304,12 +218,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 2,
     borderTopRightRadius: 2,
   },
-  towerLeft: {
-    height: 32,
-  },
-  towerRight: {
-    height: 28,
-  },
+  towerLeft:  { height: 32 },
+  towerRight: { height: 28 },
   buildingBody: {
     width: 28,
     height: 44,
@@ -333,8 +243,6 @@ const styles = StyleSheet.create({
     top: 8,
     right: 8,
   },
-
-  // ── Text ──
   wordmark: {
     fontSize: 38,
     fontWeight: '800',
@@ -342,9 +250,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     marginBottom: 12,
   },
-  wordmarkAccent: {
-    color: '#06B6D4',
-  },
+  wordmarkAccent: { color: '#06B6D4' },
   accentLine: {
     height: 2.5,
     backgroundColor: '#06B6D4',
@@ -361,8 +267,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     letterSpacing: 0.4,
   },
-
-  // ── Version ──
   versionWrap: {
     position: 'absolute',
     bottom: 48,

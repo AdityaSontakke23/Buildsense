@@ -29,15 +29,21 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    if (!validate()) return;
-    const { error } = await signIn(email, password);
-    if (!error) router.replace('/(tabs)/home');
-  };
+  if (!validate()) return;
+  console.log('🟡 handleLogin called');
+  const { data, error } = await signIn(email, password);
+  console.log('🔴 signIn returned | error:', !!error, '| data:', !!data);
+  if (error) {
+    console.log('🛑 returning early — should stay on login screen');
+    return;
+  }
+  if (data?.session) router.replace('/(tabs)/home');
+};
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex}
       >
         <ScrollView
@@ -69,7 +75,7 @@ export default function LoginScreen() {
               <View
                 style={[
                   styles.errorBanner,
-                  { backgroundColor: colors.error + "15" },
+                  { backgroundColor: colors.error + '15' },
                 ]}
               >
                 <Text style={[styles.errorText, { color: colors.error }]}>
@@ -81,7 +87,10 @@ export default function LoginScreen() {
             <Input
               label="Email"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setEmail(text);
+                setFieldErrors((prev) => ({ ...prev, email: undefined }));
+              }}
               placeholder="you@email.com"
               keyboardType="email-address"
               error={fieldErrors.email}
@@ -89,7 +98,10 @@ export default function LoginScreen() {
             <Input
               label="Password"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(text) => {
+                setPassword(text);
+                setFieldErrors((prev) => ({ ...prev, password: undefined }));
+              }}
               placeholder="Min. 6 characters"
               secureTextEntry
               error={fieldErrors.password}
@@ -104,7 +116,7 @@ export default function LoginScreen() {
 
             <Pressable
               style={styles.linkRow}
-              onPress={() => router.push("/(auth)/forgot-password")}
+              onPress={() => router.push('/(auth)/forgot-password')}
             >
               <Text style={[styles.link, { color: colors.primary }]}>
                 Forgot password?
@@ -115,9 +127,9 @@ export default function LoginScreen() {
           {/* Footer */}
           <View style={styles.footer}>
             <Text style={[styles.footerText, { color: colors.textLight }]}>
-              Don't have an account?{" "}
+              Don't have an account?{' '}
             </Text>
-            <Pressable onPress={() => router.push("/(auth)/signup")}>
+            <Pressable onPress={() => router.push('/(auth)/signup')}>
               <Text style={[styles.footerLink, { color: colors.primary }]}>
                 Sign up
               </Text>

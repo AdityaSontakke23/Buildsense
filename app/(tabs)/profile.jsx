@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Alert,
-  ScrollView, Pressable, Switch, Image, ActivityIndicator
+  ScrollView, Pressable, Switch, Image, ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,34 +24,107 @@ const getInitials = (name = '') => {
 };
 
 
-const SettingRow = ({ icon, label, value, onPress, rightEl, colors, active }) => (
-  <Pressable
-    onPress={onPress}
-    style={({ pressed }) => [
-      styles.settingRow,
-      {
-        borderBottomColor: colors.border,
-        opacity: pressed && onPress ? 0.7 : 1,
-        backgroundColor: active ? colors.primary + '10' : 'transparent',
-      },
-    ]}
-  >
-    <View style={[styles.settingIcon, { backgroundColor: colors.primary + '15' }]}>
-      <Ionicons name={icon} size={18} color={colors.primary} />
-    </View>
-    <Text style={[styles.settingLabel, { color: colors.text }]}>{label}</Text>
-    <View style={styles.settingRight}>
-      {value && (
-        <Text style={[styles.settingValue, { color: colors.textLight }]}>{value}</Text>
-      )}
-      {rightEl ?? (onPress
-        ? <Ionicons name="chevron-forward" size={16} color={colors.textLight} />
-        : null
-      )}
-    </View>
-  </Pressable>
-);
+// ─── Animated stat number count-up ───────────────────────────────────────────
 
+function AnimatedNumber({ value, style }) {
+  const anim    = useRef(new Animated.Value(0)).current;
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    if (typeof value !== 'number') return;
+    anim.setValue(0);
+    Animated.timing(anim, {
+      toValue: value,
+      duration: 900,
+      delay: 400,
+      useNativeDriver: false,
+    }).start();
+    const id = anim.addListener(({ value: v }) => setDisplay(Math.round(v)));
+    return () => anim.removeListener(id);
+  }, [value]);
+
+  if (typeof value !== 'number') return <Text style={style}>{value}</Text>;
+  return <Text style={style}>{display}</Text>;
+}
+
+function VerifiedChip() {
+  const spin = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(spin, {
+        toValue: 1,
+        duration: 3000,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
+
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+
+  return (
+    <View style={styles.verifiedChip}>
+      <View style={styles.verifiedIconWrap}>
+        {/* Rotating dashed border ring */}
+        <Animated.View style={[styles.verifiedRing, { transform: [{ rotate }] }]} />
+        {/* Static tick in centre */}
+        <Ionicons name="checkmark-circle" size={14} color="#75f1ab" style={styles.verifiedTick} />
+      </View>
+      <Text style={[styles.verifiedText, { color: '#75f1ab' }]}>Verified Account</Text>
+    </View>
+  );
+}
+
+// ─── SettingRow — unchanged logic, spring press added ────────────────────────
+
+const SettingRow = ({ icon, label, value, onPress, rightEl, colors, active, iconAnim }) => {
+  const scale = useRef(new Animated.Value(1)).current;
+  const onPressIn  = () => onPress &&
+    Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, speed: 50, bounciness: 4 }).start();
+  const onPressOut = () =>
+    Animated.spring(scale, { toValue: 1,    useNativeDriver: true, speed: 30, bounciness: 8 }).start();
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      style={({ pressed }) => [
+        styles.settingRow,
+        {
+          borderBottomColor: colors.border,
+          opacity: pressed && onPress ? 0.7 : 1,
+          backgroundColor: active ? colors.primary + '10' : 'transparent',
+        },
+      ]}
+    >
+      <Animated.View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, transform: [{ scale }] }}>
+        <View style={[styles.settingIcon, { backgroundColor: colors.primary + '15' }]}>
+          {/* If iconAnim is provided, wrap the icon in a rotating Animated.View */}
+          {iconAnim ? (
+            <Animated.View style={{ transform: [{ rotate: iconAnim }] }}>
+              <Ionicons name={icon} size={18} color={colors.primary} />
+            </Animated.View>
+          ) : (
+            <Ionicons name={icon} size={18} color={colors.primary} />
+          )}
+        </View>
+        <Text style={[styles.settingLabel, { color: colors.text }]}>{label}</Text>
+        <View style={styles.settingRight}>
+          {value && (
+            <Text style={[styles.settingValue, { color: colors.textLight }]}>{value}</Text>
+          )}
+          {rightEl ?? (onPress
+            ? <Ionicons name="chevron-forward" size={16} color={colors.textLight} />
+            : null
+          )}
+        </View>
+      </Animated.View>
+    </Pressable>
+  );
+};
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ProfileScreen() {
   const { user, signOut, isLoading, updateAvatar } = useAuth();
@@ -58,7 +132,6 @@ export default function ProfileScreen() {
   const { projects } = useProjects();
   const [avatarUploading, setAvatarUploading] = useState(false);
 
-  // Local avatar URL — reflects immediately after upload without waiting for auth refresh
   const [localAvatarUrl, setLocalAvatarUrl] = useState(
     user?.user_metadata?.avatar_url ?? null
   );
@@ -70,8 +143,61 @@ export default function ProfileScreen() {
   const initials      = getInitials(displayName);
   const avatarUrl     = localAvatarUrl;
 
+  // ── Mount animation refs ──
+  const titleAnim    = useRef(new Animated.Value(0)).current;
+  const cardAnim     = useRef(new Animated.Value(0)).current;
+  const cardScale    = useRef(new Animated.Value(0.95)).current;
+  const statsAnim    = useRef([
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]).current;
+  const prefAnim     = useRef(new Animated.Value(0)).current;
+  const aboutAnim    = useRef(new Animated.Value(0)).current;
+  const logoutAnim   = useRef(new Animated.Value(0)).current;
 
-  // ── Image picker ──────────────────────────────────────────
+  // ── Dark mode moon rotation ──
+  const moonRot      = useRef(new Animated.Value(isDark ? 1 : 0)).current;
+  const moonDeg      = moonRot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+
+  // ── Mount stagger ──
+  useEffect(() => {
+    Animated.stagger(80, [
+      // Title
+      Animated.timing(titleAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
+      // Identity card
+      Animated.parallel([
+        Animated.timing(cardAnim,  { toValue: 1, duration: 420, useNativeDriver: true }),
+        Animated.spring(cardScale, { toValue: 1, useNativeDriver: true, speed: 18, bounciness: 6 }),
+      ]),
+      // Stats stagger
+      ...statsAnim.map(a =>
+        Animated.timing(a, { toValue: 1, duration: 340, useNativeDriver: true })
+      ),
+      // Section labels + cards
+      Animated.timing(prefAnim,   { toValue: 1, duration: 320, useNativeDriver: true }),
+      Animated.timing(aboutAnim,  { toValue: 1, duration: 320, useNativeDriver: true }),
+      Animated.timing(logoutAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  // ── Moon rotates on dark mode toggle ──
+  const handleToggleTheme = () => {
+    Animated.timing(moonRot, {
+      toValue: isDark ? 0 : 1,
+      duration: 480,
+      useNativeDriver: true,
+    }).start();
+    toggleTheme();
+  };
+
+  const makeSlide = (anim, offsetY = 16) => ({
+    opacity: anim,
+    transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [offsetY, 0] }) }],
+  });
+
+
+  // ── Image picker — unchanged ──
   const handlePickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -99,11 +225,12 @@ export default function ProfileScreen() {
     if (error) {
       Alert.alert('Upload Failed', 'Could not upload your photo. Please try again.');
     } else if (url) {
-      setLocalAvatarUrl(url); // immediately reflects in UI
+      setLocalAvatarUrl(url);
     }
   };
 
 
+  // ── Logout — unchanged ──
   const handleLogout = () => {
     Alert.alert(
       'Log Out',
@@ -129,174 +256,291 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Page title ── */}
+        <Animated.View style={makeSlide(titleAnim, 12)}>
+          <Text style={[styles.pageTitle, { color: colors.text }]}>
+            Profile
+          </Text>
+          <LinearGradient
+            colors={["#9760d2", "#7ee887"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.titleUnderline}
+          />
+        </Animated.View>
 
-        {/* Page title */}
-        <Text style={[styles.pageTitle, { color: colors.text }]}>Profile</Text>
-
-        {/* Identity card */}
-        <LinearGradient
-          colors={['#6366F1', '#8B5CF6', '#06B6D4']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.identityCard}
+        {/* ── Identity card ── */}
+        <Animated.View
+          style={[
+            makeSlide(cardAnim, 20),
+            {
+              transform: [
+                {
+                  translateY: cardAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [20, 0],
+                  }),
+                },
+                { scale: cardScale },
+              ],
+            },
+          ]}
         >
-          {/* Decorative circles */}
-          <View style={styles.decCircle1} />
-          <View style={styles.decCircle2} />
+          <LinearGradient
+            colors={["#6366F1", "#8B5CF6", "#06B6D4"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.identityCard}
+          >
+            <View style={styles.decCircle1} />
+            <View style={styles.decCircle2} />
 
-          {/* ── Tappable Avatar ── */}
-          <Pressable onPress={handlePickAvatar} disabled={avatarUploading} style={styles.avatarPressable}>
-            <LinearGradient
-              colors={['#9760d2', '#7ee887', '#F5D9B0']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.avatarRing}
+            {/* Tappable Avatar — unchanged */}
+            <Pressable
+              onPress={handlePickAvatar}
+              disabled={avatarUploading}
+              style={styles.avatarPressable}
             >
-              <View style={styles.avatarInner}>
-                {avatarUrl ? (
-                  <Image
-                    source={{ uri: avatarUrl }}
-                    style={styles.avatarImage}
-                    resizeMode="cover"
-                  />
+              <LinearGradient
+                colors={["#9760d2", "#7ee887", "#F5D9B0"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.avatarRing}
+              >
+                <View style={styles.avatarInner}>
+                  {avatarUrl ? (
+                    <Image
+                      source={{ uri: avatarUrl }}
+                      style={styles.avatarImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text style={styles.avatarInitials}>{initials}</Text>
+                  )}
+                </View>
+              </LinearGradient>
+              <View
+                style={[
+                  styles.cameraBadge,
+                  { backgroundColor: colors.primary },
+                ]}
+              >
+                {avatarUploading ? (
+                  <ActivityIndicator size={10} color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.avatarInitials}>{initials}</Text>
+                  <Ionicons name="camera" size={11} color="#FFFFFF" />
                 )}
               </View>
-            </LinearGradient>
+            </Pressable>
 
-            {/* Camera overlay badge */}
-            <View style={[styles.cameraBadge, { backgroundColor: colors.primary }]}>
-              {avatarUploading
-                ? <ActivityIndicator size={10} color="#FFFFFF" />
-                : <Ionicons name="camera" size={11} color="#FFFFFF" />
-              }
-            </View>
-          </Pressable>
+            <Text style={styles.nameText}>{displayName}</Text>
+            <Text style={styles.emailText}>{email}</Text>
 
-          <Text style={styles.nameText}>{displayName}</Text>
-          <Text style={styles.emailText}>{email}</Text>
+            <Pressable onPress={handlePickAvatar} disabled={avatarUploading}>
+              <Text style={styles.changePhotoText}>
+                {avatarUploading ? "Uploading…" : "Tap avatar to change photo"}
+              </Text>
+            </Pressable>
 
-          {/* Change photo hint */}
-          <Pressable onPress={handlePickAvatar} disabled={avatarUploading}>
-            <Text style={styles.changePhotoText}>
-              {avatarUploading ? 'Uploading…' : 'Tap avatar to change photo'}
-            </Text>
-          </Pressable>
+            <VerifiedChip />
+          </LinearGradient>
+        </Animated.View>
 
-          {/* Verified chip */}
-          <View style={styles.verifiedChip}>
-            <Ionicons name="checkmark-circle" size={12} color="#FFFFFF" />
-            <Text style={styles.verifiedText}>Verified Account</Text>
-          </View>
-        </LinearGradient>
-
-        {/* Stats row */}
+        {/* ── Stats row ── */}
         <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.statTopBar, { backgroundColor: colors.primary }]} />
-            <Text style={[styles.statValue, { color: colors.primary }]}>{totalProjects}</Text>
-            <Text style={[styles.statLabel, { color: colors.textLight }]}>Projects</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.statTopBar, { backgroundColor: colors.success }]} />
-            <Text style={[styles.statValue, { color: totalProjects > 0 ? colors.success : colors.textLight }]}>
-              {totalProjects > 0 ? avgScore : '—'}
+          {/* Projects */}
+          <Animated.View
+            style={[
+              styles.statCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              makeSlide(statsAnim[0], 20),
+            ]}
+          >
+            <View
+              style={[styles.statTopBar, { backgroundColor: colors.primary }]}
+            />
+            <AnimatedNumber
+              value={totalProjects}
+              style={[styles.statValue, { color: colors.primary }]}
+            />
+            <Text style={[styles.statLabel, { color: colors.textLight }]}>
+              Projects
             </Text>
-            <Text style={[styles.statLabel, { color: colors.textLight }]}>Avg Score</Text>
+          </Animated.View>
+
+          {/* Avg Score */}
+          <Animated.View
+            style={[
+              styles.statCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              makeSlide(statsAnim[1], 20),
+            ]}
+          >
+            <View
+              style={[styles.statTopBar, { backgroundColor: colors.success }]}
+            />
+            <AnimatedNumber
+              value={totalProjects > 0 ? avgScore : null}
+              style={[
+                styles.statValue,
+                {
+                  color: totalProjects > 0 ? colors.success : colors.textLight,
+                },
+              ]}
+            />
+            {totalProjects === 0 && (
+              <Text style={[styles.statValue, { color: colors.textLight }]}>
+                —
+              </Text>
+            )}
+            <Text style={[styles.statLabel, { color: colors.textLight }]}>
+              Avg Score
+            </Text>
+          </Animated.View>
+
+          {/* Synced */}
+          <Animated.View
+            style={[
+              styles.statCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              makeSlide(statsAnim[2], 20),
+            ]}
+          >
+            <View
+              style={[styles.statTopBar, { backgroundColor: colors.secondary }]}
+            />
+            <Ionicons
+              name="cloud-done-outline"
+              size={22}
+              color={colors.secondary}
+            />
+            <Text style={[styles.statLabel, { color: colors.textLight }]}>
+              Synced
+            </Text>
+          </Animated.View>
+        </View>
+
+        {/* ── Preferences ── */}
+        <Animated.View style={makeSlide(prefAnim, 14)}>
+          <View style={styles.sectionLabelRow}>
+            <View
+              style={[
+                styles.sectionAccent,
+                { backgroundColor: colors.primary },
+              ]}
+            />
+            <Text style={[styles.sectionLabel, { color: colors.textLight }]}>
+              PREFERENCES
+            </Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.statTopBar, { backgroundColor: colors.secondary }]} />
-            <Ionicons name="cloud-done-outline" size={22} color={colors.secondary} />
-            <Text style={[styles.statLabel, { color: colors.textLight }]}>Synced</Text>
+          <View
+            style={[
+              styles.settingsCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <SettingRow
+  icon="moon-outline"
+  label="Dark Mode"
+  colors={colors}
+  active={isDark}
+  iconAnim={moonDeg}
+  rightEl={
+    <Switch
+      value={isDark}
+      onValueChange={handleToggleTheme}
+      trackColor={{ false: colors.border, true: colors.primary + '80' }}
+      thumbColor={isDark ? colors.primary : colors.textLight}
+    />
+  }
+/>
+            <SettingRow
+              icon="compass-outline"
+              label="Climate Explorer"
+              colors={colors}
+              onPress={() => router.push("/(tabs)/explore")}
+            />
           </View>
-        </View>
+        </Animated.View>
 
-        {/* Preferences */}
-        <View style={styles.sectionLabelRow}>
-          <View style={[styles.sectionAccent, { backgroundColor: colors.primary }]} />
-          <Text style={[styles.sectionLabel, { color: colors.textLight }]}>PREFERENCES</Text>
-        </View>
-        <View style={[styles.settingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <SettingRow
-            icon="moon-outline"
-            label="Dark Mode"
-            colors={colors}
-            active={isDark}
-            rightEl={
-              <Switch
-                value={isDark}
-                onValueChange={toggleTheme}
-                trackColor={{ false: colors.border, true: colors.primary + '80' }}
-                thumbColor={isDark ? colors.primary : colors.textLight}
-              />
-            }
-          />
-          <SettingRow
-            icon="compass-outline"
-            label="Climate Explorer"
-            colors={colors}
-            onPress={() => router.push('/(tabs)/explore')}
-          />
-        </View>
-
-        {/* About */}
-        <View style={styles.sectionLabelRow}>
-          <View style={[styles.sectionAccent, { backgroundColor: colors.secondary }]} />
-          <Text style={[styles.sectionLabel, { color: colors.textLight }]}>ABOUT</Text>
-        </View>
-        <View style={[styles.settingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <SettingRow
-            icon="information-circle-outline"
-            label="What this app does"
-            colors={colors}
-            rightEl={null}
-          />
-          <View style={styles.aboutContent}>
-            {[
-              'Rapid passive thermal analysis for early-stage design decisions.',
-              'Estimates thermal comfort using local climate data + building inputs.',
-              'Helps visualise impact of orientation, WWR, and envelope choices.',
-            ].map((item, i) => (
-              <View key={i} style={styles.bulletRow}>
-                <LinearGradient
-                  colors={['#9760d2', '#7ee887']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.bullet}
-                />
-                <Text style={[styles.bulletText, { color: colors.textLight }]}>{item}</Text>
-              </View>
-            ))}
+        {/* ── About ── */}
+        <Animated.View style={makeSlide(aboutAnim, 14)}>
+          <View style={styles.sectionLabelRow}>
+            <View
+              style={[
+                styles.sectionAccent,
+                { backgroundColor: colors.secondary },
+              ]}
+            />
+            <Text style={[styles.sectionLabel, { color: colors.textLight }]}>
+              ABOUT
+            </Text>
           </View>
+          <View
+            style={[
+              styles.settingsCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <SettingRow
+              icon="information-circle-outline"
+              label="What this app does"
+              colors={colors}
+              rightEl={null}
+            />
+            <View style={styles.aboutContent}>
+              {[
+                "Rapid passive thermal analysis for early-stage design decisions.",
+                "Estimates thermal comfort using local climate data + building inputs.",
+                "Helps visualise impact of orientation, WWR, and envelope choices.",
+              ].map((item, i) => (
+                <View key={i} style={styles.bulletRow}>
+                  <LinearGradient
+                    colors={["#9760d2", "#7ee887"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.bullet}
+                  />
+                  <Text
+                    style={[styles.bulletText, { color: colors.textLight }]}
+                  >
+                    {item}
+                  </Text>
+                </View>
+              ))}
+            </View>
 
-          <SettingRow
-            icon="shield-checkmark-outline"
-            label="Data & Privacy"
-            colors={colors}
-            rightEl={null}
-          />
-          <Text style={[styles.privacyText, { color: colors.textLight }]}>
-            All project data is securely stored on Supabase. We do not sell your data.
-            Climate data is fetched live from OpenWeatherMap API.
-          </Text>
-        </View>
+            <SettingRow
+              icon="shield-checkmark-outline"
+              label="Data & Privacy"
+              colors={colors}
+              rightEl={null}
+            />
+            <Text style={[styles.privacyText, { color: colors.textLight }]}>
+              All project data is securely stored on Supabase. We do not sell
+              your data. Climate data is fetched live from OpenWeatherMap API.
+            </Text>
+          </View>
+        </Animated.View>
 
-        {/* Version */}
-        <View style={styles.versionRow}>
+        {/* ── Version ── */}
+        <Animated.View style={[styles.versionRow, makeSlide(logoutAnim, 10)]}>
           <Ionicons name="apps-outline" size={16} color={colors.textLight} />
-          <Text style={[styles.versionText, { color: colors.textLight }]}>BuildSense v1.0</Text>
-        </View>
+          <Text style={[styles.versionText, { color: colors.textLight }]}>
+            BuildSense v1.0
+          </Text>
+        </Animated.View>
 
-        {/* Logout */}
-        <Button
-          title="Log Out"
-          onPress={handleLogout}
-          variant="danger"
-          isLoading={isLoading}
-          style={styles.logoutBtn}
-        />
-
+        {/* ── Logout ── */}
+        <Animated.View style={makeSlide(logoutAnim, 10)}>
+          <Button
+            title="Log Out"
+            onPress={handleLogout}
+            variant="danger"
+            isLoading={isLoading}
+            style={styles.logoutBtn}
+          />
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -307,9 +551,9 @@ const styles = StyleSheet.create({
   safe:   { flex: 1 },
   scroll: { padding: SPACING.lg, paddingBottom: SPACING.xl + 16 },
 
-  pageTitle: { ...TYPOGRAPHY.h2, fontWeight: '800', marginBottom: SPACING.lg },
+  pageTitle: { ...TYPOGRAPHY.h2, fontWeight: '800', marginBottom: SPACING.xs },
+  titleUnderline: { height: 2, borderRadius: 1, marginBottom: SPACING.lg, width: '24%' },
 
-  // Identity card
   identityCard: {
     borderRadius: 20, padding: SPACING.lg,
     alignItems: 'center', marginBottom: SPACING.md,
@@ -326,7 +570,6 @@ const styles = StyleSheet.create({
     bottom: -20, left: -20,
   },
 
-  // Avatar
   avatarPressable: { marginBottom: SPACING.md },
   avatarRing: {
     width: 80, height: 80, borderRadius: 22,
@@ -339,10 +582,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     overflow: 'hidden',
   },
-  avatarImage: {
-    width: '100%', height: '100%',
-    borderRadius: 20,
-  },
+  avatarImage:    { width: '100%', height: '100%', borderRadius: 20 },
   avatarInitials: { fontSize: 28, fontWeight: '800', color: '#FFFFFF' },
 
   cameraBadge: {
@@ -362,9 +602,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm, paddingVertical: 4,
     marginTop: SPACING.sm,
   },
-  verifiedText: { ...TYPOGRAPHY.caption, color: '#FFFFFF', fontWeight: '600' },
+  verifiedText: { ...TYPOGRAPHY.caption, fontWeight: '600' },
 
-  // Stats
+  verifiedIconWrap: {
+  width: 18, height: 18,
+  alignItems: 'center', justifyContent: 'center',
+},
+verifiedRing: {
+  position: 'absolute',
+  width: 18, height: 18, borderRadius: 9,
+  borderWidth: 1.5,
+  borderColor: '#75f1ab',
+  borderStyle: 'dashed',
+},
+verifiedTick: {
+  position: 'absolute',
+},
+
   statsRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.lg },
   statCard: {
     flex: 1, borderRadius: 12, borderWidth: 1.5,
@@ -377,7 +631,6 @@ const styles = StyleSheet.create({
   statValue:  { ...TYPOGRAPHY.h2, fontWeight: '800' },
   statLabel:  { ...TYPOGRAPHY.caption },
 
-  // Section labels
   sectionLabelRow: {
     flexDirection: 'row', alignItems: 'center',
     gap: SPACING.xs, marginBottom: SPACING.sm, marginTop: SPACING.sm,
@@ -385,7 +638,6 @@ const styles = StyleSheet.create({
   sectionAccent: { width: 3, height: 14, borderRadius: 2 },
   sectionLabel:  { ...TYPOGRAPHY.caption, fontWeight: '700', letterSpacing: 1 },
 
-  // Settings card
   settingsCard: {
     borderRadius: 14, borderWidth: 1.5,
     overflow: 'hidden', marginBottom: SPACING.lg,

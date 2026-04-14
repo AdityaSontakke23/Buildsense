@@ -1,7 +1,7 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, ScrollView,
-  StyleSheet, Pressable
+  StyleSheet, Pressable, Animated
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,6 +12,9 @@ import WeatherWidget from '@/src/components/features/WeatherWidget';
 import Loader from '@/src/components/common/Loader';
 import { SPACING, TYPOGRAPHY } from '@/src/utils/constants';
 
+
+// ─── Pure helpers (unchanged) ───────────────────────────────────────────────
+
 const computeIndices = (weather) => {
   const tNorm = Math.min(Math.max((weather.temp - 18) / 24, 0), 1);
   const hNorm = Math.min(Math.max((weather.humidity - 30) / 60, 0), 1);
@@ -19,7 +22,7 @@ const computeIndices = (weather) => {
   return {
     coolingStress: Math.round((0.6 * tNorm + 0.4 * hNorm) * 100),
     heatingDemand: Math.round((1 - tNorm) * 40),
-    ventPotential:  Math.round((0.7 * wNorm + 0.3 * (1 - hNorm)) * 100),
+    ventPotential: Math.round((0.7 * wNorm + 0.3 * (1 - hNorm)) * 100),
   };
 };
 
@@ -66,13 +69,56 @@ const generateInsights = (weather, indices) => {
   return tips.slice(0, 3);
 };
 
-const IndexBar = ({ label, value, type, colors }) => {
-  const barColor = getIndexColor(value, type, colors);
-  const statusLabel = getIndexLabel(value, type);
+
+// ─── PressScale (same as home) ───────────────────────────────────────────────
+
+function PressScale({ onPress, style, children, scaleTo = 0.94 }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const onPressIn = () =>
+    Animated.spring(scale, { toValue: scaleTo, useNativeDriver: true, speed: 50, bounciness: 4 }).start();
+  const onPressOut = () =>
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }).start();
+  return (
+    <Pressable onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}>
+      <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>
+    </Pressable>
+  );
+}
+
+
+// ─── Animated index bar ───────────────────────────────────────────────────────
+
+function IndexBar({ label, value, type, colors, delay = 0 }) {
+  const barAnim  = useRef(new Animated.Value(0)).current;
+  const cardAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Card slides up
+    Animated.timing(cardAnim, {
+      toValue: 1, duration: 380, delay,
+      useNativeDriver: true,
+    }).start();
+    // Bar fills
+    Animated.timing(barAnim, {
+      toValue: value, duration: 900, delay: delay + 120,
+      useNativeDriver: false,         // width % — must be false
+    }).start();
+  }, [value]);
+
+  const barColor      = getIndexColor(value, type, colors);
+  const statusLabel   = getIndexLabel(value, type);
   const gradientColors = getBarGradient(type, value);
+  const barWidth      = barAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
 
   return (
-    <View style={[styles.indexCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <Animated.View style={[
+      styles.indexCard,
+      { backgroundColor: colors.surface, borderColor: colors.border },
+      {
+        opacity: cardAnim,
+        transform: [{ translateY: cardAnim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
+      },
+    ]}>
       <View style={styles.indexTop}>
         <Text style={[styles.indexLabel, { color: colors.text }]}>{label}</Text>
         <View style={[styles.indexBadge, { backgroundColor: barColor + '20' }]}>
@@ -80,31 +126,198 @@ const IndexBar = ({ label, value, type, colors }) => {
         </View>
       </View>
       <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
-        <LinearGradient
-          colors={gradientColors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[styles.barFill, { width: `${value}%` }]}
-        />
+        <Animated.View style={{ width: barWidth, height: '100%', borderRadius: 4, overflow: 'hidden' }}>
+          <LinearGradient
+            colors={gradientColors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
       </View>
       <Text style={[styles.indexValue, { color: colors.textLight }]}>{value}%</Text>
-    </View>
+    </Animated.View>
   );
-};
+}
+
+
+// ─── Weather icon animations ─────────────────────────────────────────────────
+
+// Thermometer — pulses scale gently
+function TempIcon({ color }) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const run = () => Animated.sequence([
+      Animated.spring(pulse, { toValue: 1.22, useNativeDriver: true, speed: 30, bounciness: 10 }),
+      Animated.spring(pulse, { toValue: 1,    useNativeDriver: true, speed: 20, bounciness: 6  }),
+      Animated.delay(2400),
+    ]).start(() => run());
+    run();
+  }, []);
+  return (
+    <Animated.View style={{ transform: [{ scale: pulse }] }}>
+      <Ionicons name="thermometer-outline" size={20} color={color} />
+    </Animated.View>
+  );
+}
+
+// Water drop — bobs up and down
+function HumidityIcon({ color }) {
+  const bob = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bob, { toValue: -4, duration: 800,  useNativeDriver: true }),
+        Animated.timing(bob, { toValue:  0, duration: 800,  useNativeDriver: true }),
+        Animated.delay(600),
+      ])
+    ).start();
+  }, []);
+  return (
+    <Animated.View style={{ transform: [{ translateY: bob }] }}>
+      <Ionicons name="water-outline" size={20} color={color} />
+    </Animated.View>
+  );
+}
+
+// Wind — slides right repeatedly
+function WindIcon({ color }) {
+  const slide = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(slide, { toValue: 5,  duration: 500, useNativeDriver: true }),
+        Animated.timing(slide, { toValue: -3, duration: 300, useNativeDriver: true }),
+        Animated.timing(slide, { toValue: 0,  duration: 400, useNativeDriver: true }),
+        Animated.delay(1400),
+      ])
+    ).start();
+  }, []);
+  return (
+    <Animated.View style={{ transform: [{ translateX: slide }] }}>
+      <Ionicons name="speedometer-outline" size={20} color={color} />
+    </Animated.View>
+  );
+}
+
+// Cloud — drifts left–right slowly
+function CloudIcon({ color }) {
+  const drift = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(drift, { toValue:  4, duration: 1800, useNativeDriver: true }),
+        Animated.timing(drift, { toValue: -4, duration: 1800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  return (
+    <Animated.View style={{ transform: [{ translateX: drift }] }}>
+      <Ionicons name="cloudy-outline" size={20} color={color} />
+    </Animated.View>
+  );
+}
+
+
+// ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function ExploreScreen() {
-  const { colors } = useTheme();
+  const { colors }  = useTheme();
   const { weather, isLoading, error, fetchWeather } = useWeather();
   const [cityInput, setCityInput] = useState('');
+
+  // ── Mount stagger anims ──
+  const headerAnim    = useRef(new Animated.Value(0)).current;
+  const underlineAnim = useRef(new Animated.Value(0)).current;
+  const searchAnim    = useRef(new Animated.Value(0)).current;
+
+  // ── Weather results block ──
+  const resultsAnim = useRef(new Animated.Value(0)).current;
+
+  // ── Error banner ──
+  const errorAnim = useRef(new Animated.Value(0)).current;
+
+  // ── Insight tips stagger ──
+  const tipAnims = useRef(
+    Array.from({ length: 3 }, () => new Animated.Value(0))
+  ).current;
+
+  // ── Empty state float ──
+  const floatAnim = useRef(new Animated.Value(0)).current;
+
+  // ── Refresh icon spin ──
+  const refreshSpin = useRef(new Animated.Value(0)).current;
+  const refreshDeg  = refreshSpin.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] });
+
+  // ── Header underline width ──
+  const underlineWidth = underlineAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+
+  useEffect(() => {
+    // Section mount stagger
+    Animated.stagger(90, [headerAnim, searchAnim].map(a =>
+      Animated.timing(a, { toValue: 1, duration: 400, useNativeDriver: true })
+    )).start();
+
+    // Underline draw-in (useNativeDriver: false — width)
+    Animated.timing(underlineAnim, {
+      toValue: 1, duration: 600, delay: 120,
+      useNativeDriver: false,
+    }).start();
+
+    // Empty state float loop
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, { toValue: -10, duration: 1600, useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue:   0, duration: 1600, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  // Show results block when weather arrives
+  useEffect(() => {
+    if (weather) {
+      resultsAnim.setValue(0);
+      Animated.timing(resultsAnim, {
+        toValue: 1, duration: 500,
+        useNativeDriver: true,
+      }).start();
+
+      // Insight tips stagger
+      tipAnims.forEach(a => a.setValue(0));
+      Animated.stagger(80, tipAnims.map(a =>
+        Animated.spring(a, { toValue: 1, useNativeDriver: true, speed: 18, bounciness: 5 })
+      )).start();
+    }
+  }, [weather]);
+
+  // Error banner slide-down
+  useEffect(() => {
+    if (error) {
+      errorAnim.setValue(0);
+      Animated.spring(errorAnim, {
+        toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6,
+      }).start();
+    }
+  }, [error]);
 
   const handleFetch = useCallback(async () => {
     const city = cityInput.trim();
     if (!city) return;
+    // Spin refresh icon once
+    refreshSpin.setValue(0);
+    Animated.timing(refreshSpin, {
+      toValue: 360, duration: 600, useNativeDriver: true,
+    }).start();
     await fetchWeather(city);
   }, [cityInput, fetchWeather]);
 
-  const indices = weather ? computeIndices(weather) : null;
+  const indices  = weather ? computeIndices(weather) : null;
   const insights = weather && indices ? generateInsights(weather, indices) : [];
+
+  const makeSlide = (anim, offsetY = 18) => ({
+    opacity: anim,
+    transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [offsetY, 0] }) }],
+  });
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
@@ -114,8 +327,8 @@ export default function ExploreScreen() {
         keyboardShouldPersistTaps="handled"
       >
 
-        {/* Header */}
-        <View style={styles.headerRow}>
+        {/* ── Header ── */}
+        <Animated.View style={[styles.headerRow, makeSlide(headerAnim)]}>
           <View>
             <Text style={[styles.title, { color: colors.text }]}>Climate Explorer</Text>
             <Text style={[styles.subtitle, { color: colors.textLight }]}>
@@ -126,64 +339,79 @@ export default function ExploreScreen() {
             <Pressable
               onPress={handleFetch}
               hitSlop={8}
-              style={[styles.refreshBtn, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}
+              style={[styles.refreshBtn, {
+                backgroundColor: colors.primary + '15',
+                borderColor: colors.primary + '30',
+              }]}
             >
-              <Ionicons name="refresh-outline" size={20} color={colors.primary} />
+              <Animated.View style={{ transform: [{ rotate: refreshDeg }] }}>
+                <Ionicons name="refresh-outline" size={20} color={colors.primary} />
+              </Animated.View>
             </Pressable>
           )}
-        </View>
+        </Animated.View>
 
-        {/* Accent underline */}
-        <LinearGradient
-          colors={['#9760d2', '#7ee887', '#d0f183']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.headerUnderline}
-        />
+        {/* ── Accent underline — draw-in ── */}
+        <Animated.View style={{ width: underlineWidth, marginBottom: SPACING.lg }}>
+          <LinearGradient
+            colors={['#9760d2', '#7ee887', '#d0f183']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.headerUnderline}
+          />
+        </Animated.View>
 
         {/* Search */}
-        <View style={styles.searchWrap}>
-          <View style={[styles.searchRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Ionicons name="search-outline" size={18} color={colors.textLight} />
-            <TextInput
-              value={cityInput}
-              onChangeText={setCityInput}
-              placeholder="Enter city name (e.g. Mumbai)"
-              placeholderTextColor={colors.textLight}
-              style={[styles.searchInput, { color: colors.text }]}
-              returnKeyType="search"
-              onSubmitEditing={handleFetch}
-            />
-          </View>
-          <LinearGradient
-            colors={['#6366F1', '#06B6D4']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.fetchBtnGradient}
-          >
-            <Pressable
-              onPress={handleFetch}
-              style={({ pressed }) => [styles.fetchBtn, { opacity: pressed ? 0.88 : 1 }]}
-            >
-              {isLoading
-                ? <Loader size="small" color="#FFFFFF" />
-                : <Ionicons name="cloud-download-outline" size={20} color="#FFFFFF" />
-              }
-            </Pressable>
-          </LinearGradient>
-        </View>
+<View style={styles.searchWrap}>
+<View style={[styles.searchRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+<Ionicons name="search-outline" size={18} color={colors.textLight} />
+<TextInput
+value={cityInput}
+onChangeText={setCityInput}
+placeholder="Enter city name (e.g. Mumbai)"
+placeholderTextColor={colors.textLight}
+style={[styles.searchInput, { color: colors.text }]}
+returnKeyType="search"
+onSubmitEditing={handleFetch}
+/>
+</View>
+<LinearGradient
+colors={['#6366F1', '#06B6D4']}
+start={{ x: 0, y: 0 }}
+end={{ x: 1, y: 1 }}
+style={styles.fetchBtnGradient}
+>
+<Pressable
+onPress={handleFetch}
+style={({ pressed }) => [styles.fetchBtn, { opacity: pressed ? 0.88 : 1 }]}
+>
+{isLoading
+? <Loader size="small" color="#FFFFFF" />
+: <Ionicons name="cloud-download-outline" size={20} color="#FFFFFF" />
+}
+</Pressable>
+</LinearGradient>
+</View>
 
-        {/* Error */}
+        {/* ── Error banner — slides down ── */}
         {error && (
-          <View style={[styles.errorBanner, { backgroundColor: colors.error + '15', borderColor: colors.error + '30' }]}>
+          <Animated.View style={[
+            styles.errorBanner,
+            { backgroundColor: colors.error + '15', borderColor: colors.error + '30' },
+            {
+              opacity: errorAnim,
+              transform: [{ translateY: errorAnim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) }],
+            },
+          ]}>
             <Ionicons name="alert-circle-outline" size={16} color={colors.error} />
             <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-          </View>
+          </Animated.View>
         )}
 
-        {/* Weather results */}
+        {/* ── Weather results — fade + slide up on arrival ── */}
         {weather && (
-          <>
+          <Animated.View style={makeSlide(resultsAnim, 24)}>
+
             {/* City weather header */}
             <LinearGradient
               colors={['#0EA5E9', '#6366F1', '#8B5CF6']}
@@ -199,8 +427,35 @@ export default function ExploreScreen() {
               <Text style={styles.bigTemp}>{weather.temp}°C</Text>
             </LinearGradient>
 
-            {/* Weather widget */}
+            {/* Weather widget — icons are animated via WeatherWidget or inline below */}
             <WeatherWidget weather={weather} compact={false} />
+
+            {/* ── Animated weather icon row ──
+            <View style={[styles.iconRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.iconItem}>
+                <TempIcon color={colors.error} />
+                <Text style={[styles.iconVal, { color: colors.text }]}>{weather.temp}°</Text>
+                <Text style={[styles.iconLbl, { color: colors.textLight }]}>Temp</Text>
+              </View>
+              <View style={[styles.iconDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.iconItem}>
+                <HumidityIcon color={colors.primary} />
+                <Text style={[styles.iconVal, { color: colors.text }]}>{weather.humidity}%</Text>
+                <Text style={[styles.iconLbl, { color: colors.textLight }]}>Humidity</Text>
+              </View>
+              <View style={[styles.iconDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.iconItem}>
+                <WindIcon color={colors.secondary} />
+                <Text style={[styles.iconVal, { color: colors.text }]}>{weather.windSpeed}</Text>
+                <Text style={[styles.iconLbl, { color: colors.textLight }]}>Wind m/s</Text>
+              </View>
+              <View style={[styles.iconDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.iconItem}>
+                <CloudIcon color={colors.textLight} />
+                <Text style={[styles.iconVal, { color: colors.text }]}>{weather.clouds ?? '—'}%</Text>
+                <Text style={[styles.iconLbl, { color: colors.textLight }]}>Clouds</Text>
+              </View>
+            </View> */}
 
             {/* Climate indices */}
             <View style={styles.sectionHeader}>
@@ -208,13 +463,12 @@ export default function ExploreScreen() {
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Climate Indices</Text>
             </View>
 
-            <IndexBar label="Cooling Stress Index"      value={indices.coolingStress} type="cooling" colors={colors} />
-            <IndexBar label="Heating Demand Factor"     value={indices.heatingDemand} type="heating" colors={colors} />
-            <IndexBar label="Ventilation Potential Index" value={indices.ventPotential} type="vent"  colors={colors} />
+            <IndexBar label="Cooling Stress Index"        value={indices.coolingStress} type="cooling" colors={colors} delay={0}   />
+            <IndexBar label="Heating Demand Factor"       value={indices.heatingDemand} type="heating" colors={colors} delay={80}  />
+            <IndexBar label="Ventilation Potential Index" value={indices.ventPotential}  type="vent"    colors={colors} delay={160} />
 
             {/* Insights */}
             <View style={[styles.insightBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              {/* Left accent strip */}
               <LinearGradient
                 colors={['#FBBF24', '#F97316']}
                 start={{ x: 0, y: 0 }}
@@ -227,10 +481,23 @@ export default function ExploreScreen() {
                   <Text style={[styles.insightTitle, { color: colors.text }]}>What it means today</Text>
                 </View>
                 {insights.map((tip, i) => (
-                  <View key={i} style={styles.tipRow}>
+                  <Animated.View
+                    key={i}
+                    style={[
+                      styles.tipRow,
+                      {
+                        opacity: tipAnims[i] ?? 1,
+                        transform: [{
+                          translateX: (tipAnims[i] ?? new Animated.Value(1)).interpolate({
+                            inputRange: [0, 1], outputRange: [20, 0],
+                          }),
+                        }],
+                      },
+                    ]}
+                  >
                     <View style={[styles.tipDot, { backgroundColor: colors.secondary }]} />
                     <Text style={[styles.tipText, { color: colors.text }]}>{tip}</Text>
-                  </View>
+                  </Animated.View>
                 ))}
               </View>
             </View>
@@ -238,20 +505,22 @@ export default function ExploreScreen() {
             <Text style={[styles.disclaimer, { color: colors.textLight }]}>
               Live data used for calibration, not prediction.
             </Text>
-          </>
+          </Animated.View>
         )}
 
-        {/* Empty state */}
+        {/* ── Empty state — floating icon ── */}
         {!weather && !isLoading && (
           <View style={styles.emptyWrap}>
-            <LinearGradient
-              colors={['#9760d220', '#7ee88720']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.emptyIconCircle}
-            >
-              <Ionicons name="partly-sunny-outline" size={44} color={colors.textLight} />
-            </LinearGradient>
+            <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
+              <LinearGradient
+                colors={['#9760d220', '#7ee88720']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.emptyIconCircle}
+              >
+                <Ionicons name="partly-sunny-outline" size={44} color={colors.textLight} />
+              </LinearGradient>
+            </Animated.View>
             <Text style={[styles.emptyText, { color: colors.textLight }]}>
               Enter a city name above to explore its climate conditions
             </Text>
@@ -262,6 +531,7 @@ export default function ExploreScreen() {
     </SafeAreaView>
   );
 }
+
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
@@ -277,10 +547,7 @@ const styles = StyleSheet.create({
     width: 40, height: 40, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center', borderWidth: 1,
   },
-  headerUnderline: {
-    height: 2, borderRadius: 1,
-    marginBottom: SPACING.lg,
-  },
+  headerUnderline: { height: 2, borderRadius: 1 },
 
   searchWrap: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.md },
   searchRow: {
@@ -290,7 +557,7 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, ...TYPOGRAPHY.body, paddingVertical: SPACING.sm },
   fetchBtnGradient: { width: 48, height: 48, borderRadius: 12 },
-  fetchBtn: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  fetchBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', width: 48, height: 48 },
 
   errorBanner: {
     flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
@@ -313,6 +580,17 @@ const styles = StyleSheet.create({
   cityName: { ...TYPOGRAPHY.h2, color: '#FFFFFF', fontWeight: '800' },
   conditionText: { ...TYPOGRAPHY.bodySmall, color: '#FFFFFFB0', textTransform: 'capitalize', marginTop: 2 },
   bigTemp: { fontSize: 48, fontWeight: '800', color: '#FFFFFF' },
+
+  // ── Animated icon row ──
+  iconRow: {
+    flexDirection: 'row', borderRadius: 14,
+    borderWidth: 1.5, padding: SPACING.md,
+    marginBottom: SPACING.md, alignItems: 'center',
+  },
+  iconItem: { flex: 1, alignItems: 'center', gap: 4 },
+  iconVal: { ...TYPOGRAPHY.bodySmall, fontWeight: '700' },
+  iconLbl: { ...TYPOGRAPHY.caption },
+  iconDivider: { width: 1, height: 36, marginHorizontal: SPACING.xs },
 
   sectionHeader: {
     flexDirection: 'row', alignItems: 'center',
