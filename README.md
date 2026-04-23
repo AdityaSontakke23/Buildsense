@@ -4,7 +4,6 @@
 
 ### Passive Thermal Analysis for Early-Stage Building Design
 
-
 ***
 
 *Enter your building's location, envelope, and design strategies and get an overheating risk score in seconds.*
@@ -24,19 +23,19 @@ Instead of expensive simulation software, BuildSense lets you input your buildin
 ## Features
 
 - **Live Climate Data** — Fetches real-time weather (temperature, humidity, wind, cloud cover) for any Indian city via OpenWeatherMap
- 
+
 - **5-Step Project Builder** — Guided flow: Location → Building Details → Envelope → Passive Strategies → Review & Score
- 
+
 - **Thermal Score Engine** — Calculates overheating risk score (0–100) based on building orientation, wall/roof materials, WWR, and passive strategies
- 
+
 - **Cloud Sync** — All projects saved to Supabase, accessible across sessions
- 
+
 - **Climate Explorer** — Search any city and instantly see Cooling Stress, Heating Demand, and Ventilation Potential scores
- 
+
 - **Saved Projects** — Full history of all your building analyses with search and swipe-to-delete
- 
+
 - **Dark / Light Mode** — Full theme support with persistent preference
- 
+
 - **User Profiles** — Auth with avatar upload, verified account status, and project stats
 
 ***
@@ -138,9 +137,17 @@ BuildSense calculates a **thermal performance score (0–100)** based on:
 
 ## 📦 Download
 
-The latest APK can be downloaded directly from the [Releases](https://github.com/AdityaSontakke23/Buildsense/releases) page.
+You can also view all releases on the [Releases page](https://github.com/AdityaSontakke23/Buildsense/releases).
 
-[
+OR
+
+The latest APK can be downloaded directly — no account needed, install on any Android device.
+
+<div align="center">
+  <a href="https://github.com/AdityaSontakke23/Buildsense/releases/latest/download/Buildsense.apk">
+    <img src="https://img.shields.io/badge/⬇️%20Download%20APK-v1.0.0-brightgreen?style=for-the-badge&logo=android" alt="Download APK"/>
+  </a>
+</div>
 
 > **Note:** You may need to enable *"Install from unknown sources"* in your Android settings to install the APK.
 
@@ -162,5 +169,3 @@ BuildSense collects only the information you provide (email, building project da
 <div align="center">
   Made for architecture students in India
 </div>
-
-
