@@ -11,6 +11,7 @@ pipeline {
     }
 
     environment {
+        PATH = "/opt/homebrew/bin:/usr/local/bin:${env.PATH}"
         IMAGE_NAME = "adityasontakke23/buildsense"
     }
 
