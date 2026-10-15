@@ -1,0 +1,202 @@
+name: BuildSense CI & Jenkins Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  policy-as-code:
+    name: Policy as Code (PaC) Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Open Policy Agent (OPA)
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: latest
+
+      - name: Run OPA Rego Unit Tests
+        run: |
+          echo "=========================================================="
+          echo " Running Declarative OPA Rego Policy Test Suite"
+          echo "=========================================================="
+          opa test policies/ -v
+
+      - name: Execute Policy as Code Engine
+        run: |
+          echo "=========================================================="
+          echo " Enforcing Policy as Code (PaC) Rules"
+          echo "=========================================================="
+          node policies/verify-policy.js
+
+      - name: Upload Policy Compliance Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: policy-compliance-report
+          path: reports/policy-report.json
+          retention-days: 14
+
+      - name: Append Policy Summary to GitHub Actions
+        if: always()
+        run: |
+          if [ -f reports/policy-report.json ]; then
+            STATUS=$(jq -r '.status' reports/policy-report.json 2>/dev/null || echo "UNKNOWN")
+            PASSED=$(jq -r '.summary.passed' reports/policy-report.json 2>/dev/null || echo "0")
+            TOTAL=$(jq -r '.summary.total' reports/policy-report.json 2>/dev/null || echo "0")
+            FAILED=$(jq -r '.summary.failed' reports/policy-report.json 2>/dev/null || echo "0")
+            
+            echo "## 🛡️ Policy as Code (PaC) Compliance Report" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Status | Passed Rules | Failed Rules | Total Evaluated |" >> $GITHUB_STEP_SUMMARY
+            echo "|---|---|---|---|" >> $GITHUB_STEP_SUMMARY
+            if [ "$STATUS" = "PASSED" ]; then
+              echo "| 🟢 **PASSED** | $PASSED | $FAILED | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| 🔴 **FAILED** | $PASSED | $FAILED | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+            fi
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> Policy definitions verified: Jenkinsfile, Dockerfile, Environment, and Workspace Security." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  trigger-jenkins:
+    name: Environment Check & Jenkins Build Trigger
+    needs: policy-as-code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate Jenkins Environment & Secrets
+        id: env-check
+        env:
+          JENKINS_URL: ${{ secrets.JENKINS_URL }}
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
+          JENKINS_WEBHOOK_URL: ${{ secrets.JENKINS_WEBHOOK_URL }}
+        run: |
+          echo "=========================================================="
+          echo " Validating Jenkins Environment & Integration Secrets"
+          echo "=========================================================="
+          
+          MISSING_SECRETS=()
+
+          if [ -z "$JENKINS_URL" ] && [ -z "$JENKINS_WEBHOOK_URL" ]; then
+            MISSING_SECRETS+=("JENKINS_URL (or JENKINS_WEBHOOK_URL)")
+          fi
+
+          if [ -n "$JENKINS_URL" ]; then
+            if [ -z "$JENKINS_USER" ]; then
+              MISSING_SECRETS+=("JENKINS_USER")
+            fi
+            if [ -z "$JENKINS_TOKEN" ]; then
+              MISSING_SECRETS+=("JENKINS_TOKEN")
+            fi
+          fi
+
+          if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
+            echo "::error::Environment check failed! Missing required GitHub repository secrets:"
+            for secret in "${MISSING_SECRETS[@]}"; do
+              echo "  ❌ $secret"
+            done
+            echo ""
+            echo "To enable automatic Jenkins builds from GitHub Actions, configure repository secrets at:"
+            echo "GitHub Repo -> Settings -> Secrets and variables -> Actions -> New repository secret"
+            echo ""
+            echo "Required Secrets:"
+            echo "  - JENKINS_URL: Base URL of your Jenkins server (e.g., http://your-ip:8080 or https://jenkins.example.com)"
+            echo "  - JENKINS_USER: Jenkins username (e.g., admin)"
+            echo "  - JENKINS_TOKEN: Jenkins API Token (User -> Configure -> API Token)"
+            echo "  - JENKINS_JOB: (Optional) Job name on Jenkins (defaults to 'buildsense')"
+            echo "  - JENKINS_WEBHOOK_URL: (Optional) Direct Jenkins generic/GitHub webhook endpoint"
+            echo ""
+            echo "Failing step as environment is not configured..."
+            exit 1
+          fi
+
+          echo "✅ Jenkins environment configuration verified."
+
+      - name: Trigger Jenkins Pipeline Build
+        env:
+          JENKINS_URL: ${{ secrets.JENKINS_URL }}
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
+          JENKINS_JOB: ${{ secrets.JENKINS_JOB || 'buildsense' }}
+          JENKINS_WEBHOOK_URL: ${{ secrets.JENKINS_WEBHOOK_URL }}
+        run: |
+          echo "=========================================================="
+          echo " Dispatching Build Request to Jenkins"
+          echo "=========================================================="
+
+          if [ -n "$JENKINS_WEBHOOK_URL" ]; then
+            echo "Sending webhook trigger to: $JENKINS_WEBHOOK_URL"
+            HTTP_STATUS=$(curl -s -o /tmp/webhook_response.txt -w "%{http_code}" \
+              -X POST "$JENKINS_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "{\"ref\": \"${{ github.ref }}\", \"commit\": \"${{ github.sha }}\", \"repository\": \"${{ github.repository }}\"}")
+            
+            echo "Webhook Response HTTP Status: $HTTP_STATUS"
+            if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+              echo "✅ Successfully triggered Jenkins via Webhook!"
+            else
+              echo "::error::Failed to trigger Jenkins webhook. HTTP $HTTP_STATUS"
+              cat /tmp/webhook_response.txt
+              exit 1
+            fi
+          elif [ -n "$JENKINS_URL" ]; then
+            TARGET_JOB="${JENKINS_JOB:-buildsense}"
+            echo "Target Jenkins Job: $TARGET_JOB"
+            echo "Jenkins Server: $JENKINS_URL"
+
+            # Fetch Jenkins Crumb for CSRF protection if enabled
+            echo "Requesting CSRF crumb..."
+            CRUMB_JSON=$(curl -s -u "$JENKINS_USER:$JENKINS_TOKEN" "$JENKINS_URL/crumbIssuer/api/json" || echo "{}")
+            CRUMB=$(echo "$CRUMB_JSON" | jq -r '.crumb // empty')
+            CRUMB_FIELD=$(echo "$CRUMB_JSON" | jq -r '.crumbRequestField // "Jenkins-Crumb"')
+
+            CRUMB_HEADER=()
+            if [ -n "$CRUMB" ]; then
+              echo "Acquired CSRF Crumb ($CRUMB_FIELD)"
+              CRUMB_HEADER=(-H "$CRUMB_FIELD: $CRUMB")
+            fi
+
+            echo "Sending build request for job '$TARGET_JOB'..."
+            HTTP_STATUS=$(curl -s -o /tmp/jenkins_response.txt -w "%{http_code}" \
+              -X POST \
+              -u "$JENKINS_USER:$JENKINS_TOKEN" \
+              "${CRUMB_HEADER[@]}" \
+              "$JENKINS_URL/job/$TARGET_JOB/build")
+
+            echo "Jenkins API Response HTTP Status: $HTTP_STATUS"
+
+            if [ "$HTTP_STATUS" -eq 201 ] || [ "$HTTP_STATUS" -eq 200 ]; then
+              echo "✅ Jenkins build successfully triggered for job: $TARGET_JOB"
+              echo "Job URL: $JENKINS_URL/job/$TARGET_JOB/"
+            else
+              echo "::error::Failed to trigger Jenkins build. HTTP Status: $HTTP_STATUS"
+              echo "Response body:"
+              cat /tmp/jenkins_response.txt
+              exit 1
+            fi
+          fi
+
+      - name: Append Jenkins Trigger Summary to GitHub Actions
+        if: always()
+        run: |
+          echo "## 🚀 Jenkins Pipeline Integration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger Event**: \`${{ github.event_name }}\` on \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit SHA**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Jenkins Trigger Status**: \`${{ job.status }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "If the job failed with an environment error, add \`JENKINS_URL\`, \`JENKINS_USER\`, and \`JENKINS_TOKEN\` to GitHub repository secrets." >> $GITHUB_STEP_SUMMARY

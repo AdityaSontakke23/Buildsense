@@ -4,3 +4,8 @@ node_modules
 npm-debug.log
 Dockerfile
 Jenkinsfile
+.env
+.env*
+reports
+.github
+policies
