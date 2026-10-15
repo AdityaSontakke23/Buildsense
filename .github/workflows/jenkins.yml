@@ -30,7 +30,7 @@ jobs:
           echo "=========================================================="
           echo " Running Declarative OPA Rego Policy Test Suite"
           echo "=========================================================="
-          opa test policies/ -v
+          opa test policies/ -v || opa test policies/ --v0-compatible -v
 
       - name: Execute Policy as Code Engine
         run: |

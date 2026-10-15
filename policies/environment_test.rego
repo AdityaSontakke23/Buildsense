@@ -1,7 +1,9 @@
 package environment
 
-test_valid_environment {
-    input := {
+import rego.v1
+
+test_valid_environment if {
+    input_data := {
         "env_file_committed": false,
         "dockerignore_exists": true,
         "dockerignore_ignores_env": true,
@@ -9,12 +11,12 @@ test_valid_environment {
         "dockerignore_ignores_node_modules": true,
         "gitignore_ignores_env": true
     }
-    allow with input as input
-    count(deny) == 0 with input as input
+    allow with input as input_data
+    count(deny) == 0 with input as input_data
 }
 
-test_committed_env_rejected {
-    input := {
+test_committed_env_rejected if {
+    input_data := {
         "env_file_committed": true,
         "dockerignore_exists": true,
         "dockerignore_ignores_env": true,
@@ -22,12 +24,12 @@ test_committed_env_rejected {
         "dockerignore_ignores_node_modules": true,
         "gitignore_ignores_env": true
     }
-    not allow with input as input
-    count(deny) == 1 with input as input
+    not allow with input as input_data
+    count(deny) == 1 with input as input_data
 }
 
-test_missing_dockerignore_rejected {
-    input := {
+test_missing_dockerignore_rejected if {
+    input_data := {
         "env_file_committed": false,
         "dockerignore_exists": false,
         "dockerignore_ignores_env": false,
@@ -35,6 +37,6 @@ test_missing_dockerignore_rejected {
         "dockerignore_ignores_node_modules": false,
         "gitignore_ignores_env": true
     }
-    not allow with input as input
-    count(deny) > 0 with input as input
+    not allow with input as input_data
+    count(deny) > 0 with input as input_data
 }

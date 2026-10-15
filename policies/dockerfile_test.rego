@@ -1,7 +1,9 @@
 package dockerfile
 
-test_valid_dockerfile {
-    input := {
+import rego.v1
+
+test_valid_dockerfile if {
+    input_data := {
         "base_image": "node:20-alpine",
         "is_latest_tag": false,
         "has_workdir": true,
@@ -9,12 +11,12 @@ test_valid_dockerfile {
         "has_secrets_in_env": [],
         "uses_clean_install": true
     }
-    allow with input as input
-    count(deny) == 0 with input as input
+    allow with input as input_data
+    count(deny) == 0 with input as input_data
 }
 
-test_latest_tag_rejected {
-    input := {
+test_latest_tag_rejected if {
+    input_data := {
         "base_image": "node:latest",
         "is_latest_tag": true,
         "has_workdir": true,
@@ -22,12 +24,12 @@ test_latest_tag_rejected {
         "has_secrets_in_env": [],
         "uses_clean_install": true
     }
-    not allow with input as input
-    count(deny) == 1 with input as input
+    not allow with input as input_data
+    count(deny) == 1 with input as input_data
 }
 
-test_secret_in_env_rejected {
-    input := {
+test_secret_in_env_rejected if {
+    input_data := {
         "base_image": "node:20-alpine",
         "is_latest_tag": false,
         "has_workdir": true,
@@ -35,6 +37,6 @@ test_secret_in_env_rejected {
         "has_secrets_in_env": ["API_KEY"],
         "uses_clean_install": true
     }
-    not allow with input as input
-    count(deny) == 1 with input as input
+    not allow with input as input_data
+    count(deny) == 1 with input as input_data
 }
